@@ -1,0 +1,89 @@
+{
+  "date": "2026-09-06",
+  "status": "short_reproduction_verified_long_game_test_pending",
+  "ld14_version": "14.0.26.1",
+  "gpu": "RTX 5080",
+  "nvidia_version": "616.64",
+  "driver_sha256": "970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9",
+  "frida_version": "17.17.0",
+  "cases": [
+    {
+      "case": "baseline",
+      "cycles": 12,
+      "pixel_checks_passed": 12,
+      "tlds_created_inside_driver_thread_detach": 13,
+      "new_heaps_still_present_after_test": 13,
+      "pages_in_those_heaps": 245,
+      "registered_page_bytes_in_those_heaps": 16056320,
+      "fully_empty_registered_page_bytes": 15269888,
+      "remaining_blocks_after_deferred_frees": 57,
+      "metadata_read_failures": 0,
+      "validation_errors": [],
+      "trace_events": 702,
+      "dropped_events": 0,
+      "local_evidence_sha256": "42533bd53ab593bd4e999a97ebe6ca1da7ce5da8806d2fc25b32d69716fbb641"
+    },
+    {
+      "case": "temporary_cleanup",
+      "cycles": 12,
+      "pixel_checks_passed": 12,
+      "tlds_created_inside_driver_thread_detach": 13,
+      "new_heaps_still_present_after_test": 0,
+      "pages_in_those_heaps": 0,
+      "registered_page_bytes_in_those_heaps": 0,
+      "fully_empty_registered_page_bytes": 0,
+      "remaining_blocks_after_deferred_frees": 0,
+      "metadata_read_failures": 0,
+      "validation_errors": [],
+      "trace_events": 728,
+      "dropped_events": 0,
+      "local_evidence_sha256": "cb3b4fe8feaed53fbcafb81e0d9298cc12a73d7b50fdf103a3d2ee155f9430a8"
+    },
+    {
+      "case": "reverted",
+      "cycles": 12,
+      "pixel_checks_passed": 12,
+      "tlds_created_inside_driver_thread_detach": 13,
+      "new_heaps_still_present_after_test": 13,
+      "pages_in_those_heaps": 245,
+      "registered_page_bytes_in_those_heaps": 16056320,
+      "fully_empty_registered_page_bytes": 15400960,
+      "remaining_blocks_after_deferred_frees": 43,
+      "metadata_read_failures": 0,
+      "validation_errors": [],
+      "trace_events": 702,
+      "dropped_events": 0,
+      "local_evidence_sha256": "6a5bc0c18b2761b0cc513df7f22dca387c5118738459abed415b76afcb76f650"
+    },
+    {
+      "case": "packaged_prototype",
+      "cycles": 12,
+      "pixel_checks_passed": 12,
+      "tlds_created_inside_driver_thread_detach": 13,
+      "new_heaps_still_present_after_test": 0,
+      "pages_in_those_heaps": 0,
+      "registered_page_bytes_in_those_heaps": 0,
+      "fully_empty_registered_page_bytes": 0,
+      "remaining_blocks_after_deferred_frees": 0,
+      "metadata_read_failures": 0,
+      "validation_errors": [],
+      "trace_events": 754,
+      "dropped_events": 0,
+      "local_evidence_sha256": "03e1ee7ecb49c99e281788530bc42fa50ee1b77d5adc8edd875b554835704724"
+    }
+  ],
+  "notes": [
+    "All LD14 comparison runs used the existing semaphore patch.",
+    "Page totals describe newly created heaps, not total process memory or private-byte deltas.",
+    "Metadata identity uses TLD sequence, owner TEB, and backing heap, because addresses are reused.",
+    "The final explicit static-main-heap exclusion was additionally verified in a GPU-free native fixture.",
+    "Raw dumps, process addresses, and personal paths remain local."
+  ],
+  "prototype_counters": {
+    "thread_detaches": 34,
+    "cleaned_heaps": 13,
+    "cleanup_still_owned": 0,
+    "owner_mismatch": 0
+  },
+  "prototype_driver_code_restored": true
+}

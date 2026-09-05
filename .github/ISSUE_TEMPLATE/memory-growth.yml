@@ -1,0 +1,40 @@
+name: 内存增长或修补测试反馈
+description: 提交可比较的运行记录，区分句柄与私有提交的变化。
+title: '[测试反馈] '
+body:
+  - type: markdown
+    attributes:
+      value: 当前补丁仅修复一处信号量漏关，大额内存增长尚未解决。请先阅读安装说明，不要上传账号、令牌、厂商 DLL 或内存转储。
+  - type: input
+    id: versions
+    attributes:
+      label: 雷电、补丁版本和渲染器 SHA256
+      placeholder: LD14 14.0.26.1 / 0.1.0-alpha.1 / SHA256
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 系统与模拟器设置
+      description: Windows 版本、GPU、驱动、物理内存，以及实例 CPU/RAM/分辨率设置。
+    validations:
+      required: true
+  - type: textarea
+    id: workload
+    attributes:
+      label: 运行负载与复现步骤
+      description: 游戏版本、预热时间、挂机或战斗状态、运行时长；标明应用退出或重启。
+    validations:
+      required: true
+  - type: textarea
+    id: measurements
+    attributes:
+      label: 测量结果和 CSV
+      description: 附上记录工具的 CSV 或关键时间点。分别列出私有提交、工作集和句柄；说明补丁状态是否为 patched。
+    validations:
+      required: true
+  - type: textarea
+    id: symptoms
+    attributes:
+      label: 实际症状和发生时间
+      description: 卡顿、黑屏、崩溃、图像错误，或没有异常。黑屏请给出准确时间，便于与数据对应。

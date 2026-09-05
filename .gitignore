@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+/ld14-fix.config.json
+/logs/
+/dist/
+*.etl
+*.dmp
+*.dll
+*.exe
+*.vdi
+*.vmdk

@@ -28,6 +28,8 @@
 
 2026-09-06 新增 [NVIDIA 线程退出清理原型](experimental/README.zh-CN.md)，只支持已验证的 NVIDIA 616.64 文件。原型在 `experimental` 目录，需另外安装 Frida 并显式启用；它不在现有信号量 ZIP 中，也不会由原启动器自动应用。
 
+完整仓库现支持[两个修复的长期后台守护](experimental/README.zh-CN.md#长期运行两个修复)：无自动到期时间，跟随指定实例重启，可安装当前用户登录启动。用 `Check-LD14-Guard.cmd` 查看状态、`Stop-LD14-Guard.cmd` 停止。此模式仍为版本限定的实验修复。
+
 按平时方式运行《碧蓝航线》或原来触发问题的负载，预热约 10 分钟后启动 `Record-LD14-Stats.cmd`。每分钟记录一次，默认 4 小时，可按 Ctrl+C 停止。
 
 先比较 30-60 分钟，再看 2-4 小时。记录游戏所处阶段、应用重启以及卡顿/黑屏时间；不必刻意等内存涨到几十 GiB。将 `logs` 目录中的 CSV 和版本信息提交到 [Issues](https://github.com/Yuiffy/ldplayer14-community-fix/issues)。记录工具不会重启模拟器或清理内存。

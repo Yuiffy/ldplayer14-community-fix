@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 /ld14-fix.config.json
+/.ld14-guard-local.json
 /logs/
 /dist/
 *.etl

@@ -79,7 +79,8 @@ GUARDS = [
 
 
 def console(*arguments):
-    result = subprocess.run([str(CONSOLE), *arguments], capture_output=True, timeout=15)
+    result = subprocess.run([str(CONSOLE), *arguments], capture_output=True, timeout=15,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
     if result.returncode:
         raise RuntimeError('LD14 console failed: ' + str(result.returncode))
     return result.stdout.decode('gb18030', errors='replace')

@@ -1,5 +1,7 @@
 # Unreleased
 
+- Add explicit unlimited duration (`--minutes 0`) and a combined semaphore/NVIDIA guard that revalidates new emulator processes, supports graceful stop and optional user-login startup, and bounds diagnostic logs.
+- Add Windows guard lifecycle and session tests; keep the existing native driver cleanup and semaphore patch bytes unchanged.
 - Confirm a NVIDIA 616.64 cleanup-order defect in the tested LD14 workload: driver thread detach creates a new mimalloc heap after TLS cleanup.
 - Add an opt-in, hash-locked native cleanup prototype and Chinese installation/rollback instructions under `experimental/`.
 - Verify a 12-cycle A/B/A comparison with 13, 0, and 13 newly retained heaps; validate the packaged prototype and native ownership guards.

@@ -67,7 +67,7 @@ class GuardTests(unittest.TestCase):
                  mock.patch.object(sys, 'stderr', None):
                 self.assertEqual(guard.run_cli(), 1)
             log = (Path(directory) / 'controller.log').read_text(encoding='utf-8')
-            self.assertIn('LD14-GUARD-CONTROLLER-2', log)
+            self.assertIn('LD14-GUARD-CONTROLLER-3', log)
             self.assertIn('RuntimeError: fixture controller failure', log)
             self.assertIn('"exit_code": 1', log)
 
@@ -130,16 +130,20 @@ class GuardTests(unittest.TestCase):
 
             clock = iter([0, 18000, 18000])
             with mock.patch.object(experiment, 'load_existing_helper', return_value=fix), \
+                 mock.patch.object(experiment, 'prepare_frida') as prepare, \
                  mock.patch.object(experiment.hashlib, 'sha256') as digest, \
                  mock.patch.dict(sys.modules, {'frida': frida}), \
                  mock.patch.object(experiment.time, 'monotonic', side_effect=lambda: next(clock)), \
                  mock.patch.object(experiment, 'wait_for_end', side_effect=lambda *unused: stop.is_set()):
                 digest.return_value.hexdigest.return_value = experiment.DRIVER_SHA256
+                prepare.return_value.snapshot.return_value = {'active': True, 'skipped_null_paths': 0}
+                frida.attach.side_effect = lambda pid: session if prepare.called else self.fail('Dependency guard must precede attach')
                 result = experiment.main(['--apply', '--with-semaphore', '--minutes', str(minutes), '--quiet'],
                                          stop_event=stop, on_sample=sample, output=directory / 'report.json', expected_pid=707)
             session.detach.assert_called_once()
             script.unload.assert_called_once()
             self.assertTrue(result['driver_code_restored'])
+            self.assertTrue(samples[0]['frida_usb_guard']['active'])
             self.assertTrue(any(call.args[2] is True for call in fix.inspect_or_apply.call_args_list))
             return result
 
@@ -180,7 +184,8 @@ class GuardTests(unittest.TestCase):
         args = SimpleNamespace(console='C:\\test\\ldconsole.exe', index=1)
 
         def session(argv, **options):
-            options['on_sample']({'start': 'test', 'sample_count': 1}, {'semaphore_patch': 'patched'})
+            options['on_sample']({'start': 'test', 'sample_count': 1},
+                                 {'semaphore_patch': 'patched', 'frida_usb_guard': {'active': True}})
             if options['expected_pid'] == 202:
                 control.stopped = True
                 return {'stop_reason': 'guard_stop', 'driver_code_restored': True}

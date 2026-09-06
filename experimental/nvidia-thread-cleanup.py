@@ -59,6 +59,18 @@ def load_existing_helper():
     return module
 
 
+def prepare_frida():
+    name = 'ld14_frida_usb_guard'
+    module = sys.modules.get(name)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name('frida-usb-guard.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[name] = module
+    module.install()
+    return module
+
+
 def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pid=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--console')
@@ -123,6 +135,7 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
             raise RuntimeError('Install the dependency first: py -3 -m pip install frida==17.17.0') from error
         if frida.__version__ != '17.17.0':
             raise RuntimeError('The validated Frida version is 17.17.0')
+        usb_guard = prepare_frida()
         if stop_event is not None and stop_event.is_set():
             return {'stop_reason': 'guard_stop'}
         output_dir = output.parent if output is not None else ROOT / 'logs'
@@ -164,7 +177,8 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
                 counters = script.exports_sync.status()
                 inspection = fix.inspect_or_apply(pid, renderer, False)
                 row = {'time': datetime.now().astimezone().isoformat(), 'pid': pid, **counters,
-                       'semaphore_patch': inspection['after'], **inspection['metrics']}
+                       'semaphore_patch': inspection['after'], 'frida_usb_guard': usb_guard.snapshot(),
+                       **inspection['metrics']}
                 record_sample(report, row, output, history)
                 if counters['cleanup_still_owned'] or counters['owner_mismatch']:
                     raise RuntimeError('Unexpected heap state; stopping the experiment')

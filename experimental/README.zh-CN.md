@@ -23,7 +23,7 @@
 - Windows x64、64 位 Python 3.10 或更新版本。
 - LD14 14.0.26.1，以及主项目校验通过的 renderer / fastpipe2 文件。
 - NVIDIA 616.64，`nvoglv64.dll` SHA256 必须为 `970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9`。
-- Frida `17.17.0`。其他驱动或文件不匹配时，程序会拒绝应用。
+- Frida `17.17.0` Windows x64，`_frida.pyd` SHA256 必须为 `93638a16bf0a651c6fdc8f41228ce9069e7b79d56834cce7aec9f8b6639c671c`。其他驱动或文件不匹配时，程序会拒绝应用。
 
 不要修改 SHA256 或 RVA 来绕过兼容性检查。其他驱动版本需要重新分析。
 
@@ -62,7 +62,7 @@ powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Install
 - `Install` 通过 Windows 任务计划程序启动后台守护，并为当前用户添加登录触发。任务以当前交互用户的普通权限运行，无执行时限，不依赖启动它的终端。首次使用仍需按主项目配置 LD14 目录和实例。
 - 守护不启动雷电；你按平时方式打开选定实例后，它会自动检查版本、应用信号量修补并保持 NVIDIA 清理有效。
 - 同一实例只能运行一个守护。实例正常退出后守护会等待；再次启动后重新校验并应用两个修复。
-- 双击 `Check-LD14-Guard.cmd` 检查状态。`running: true`、`state: active`、`semaphore_patch: patched` 和 `nvidia_cleanup: true` 才表示两项均在运行。`waiting_for_ld14` 表示等待雷电启动。
+- 双击 `Check-LD14-Guard.cmd` 检查状态。`running: true`、`state: active`、`semaphore_patch: patched` 和 `nvidia_cleanup: true` 表示两项均在运行；新版另有 `frida_usb_guard.active: true`，表示依赖崩溃保护已启用。`waiting_for_ld14` 表示等待雷电启动。
 - 双击 `Stop-LD14-Guard.cmd` 正常停止守护并撤掉 NVIDIA 钩子，同时暂停计划任务及登录触发；信号量修补仍保留到雷电退出。`Start-LD14-Guard.cmd` 会重新启用任务及已安装的登录触发。
 - 移除登录启动并停止守护：`powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Uninstall`。再重启雷电可完全回退本次进程内修补。
 
@@ -71,6 +71,16 @@ powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Install
 旧版使用登录启动快捷方式，但实测曾出现守护无退出记录地消失，之后内存重新增长。退出原因尚未确定。新版执行一次 `Install` 或 `Start` 即可迁移到独立计划任务；确认守护启动后移除本项目旧快捷方式。任务记录退出结果，每次启动仍校验版本、原始指令和单实例锁。进程异常退出后需要通过 `Start-LD14-Guard.cmd` 重新启用；Windows 自动失败重试没有通过本机实测，本版不依赖该机制。
 
 `Check-LD14-Guard.cmd` 会同时显示计划任务状态。守护不存在时返回 `state: not_running`；心跳超过 90 秒未更新时返回 `state: unresponsive`，此时不能确认清理仍然有效。旧样本移到 `last_recorded`，不再作为当前内存或补丁状态显示。`logs/guard/controller.log` 记录控制器启动、正常退出、Python 异常和可捕获的原生故障；被强行终止时仍可能没有退出日志，可结合 `scheduled_task.last_result` 排查。
+
+### Frida USB 依赖崩溃保护
+
+2026-09-06 的一次转储已定位到 Frida 所带 libusb 的空路径比较：Windows USB 设备变化时，`_stricmp` 收到空指针，以 `0xC0000409 / FAST_FAIL_INVALID_ARG` 终止守护。此时雷电仍可运行，但 NVIDIA 清理失去控制器后会撤回。
+
+`frida-usb-guard.py` 在设备管理器初始化前，为设备到达和移除循环中的两处比较添加空值检查。空路径按“不匹配”跳过；有效路径继续调用原比较函数。它只在当前 Python 控制器内修改 10 字节调用指令，辅助代码和计数使用 8 KiB 内存，不修改磁盘上的 Frida、雷电或驱动文件。正常 USB 发现仍保留。文件哈希或原始指令不匹配时拒绝启用。
+
+更新完整仓库后，运行一次 `Start-LD14-Guard.cmd`。启动器会正常停止旧版控制器并启动新版，保留正在运行的雷电实例。日志标记为 `LD14-DUAL-FIX-GUARD-3`；`frida_usb_guard.skipped_null_paths` 是本次控制器拦截的空路径比较次数，初始为 0 是正常的。单次实验命令也自动使用该保护。
+
+此更新本身不要求重启雷电。若之前失去保护后已积累内存，方便时正常重启雷电可以获得干净基线；重新启用守护不会追溯清空历史泄漏。原生隔离测试已验证原版两处比较复现同一崩溃、修正版通过 14 组比较及本地附加测试。长期运行仍需继续观察。详见[依赖崩溃诊断](../docs/FRIDA-USB-CRASH.md)。
 
 `logs/guard/current-experiment.json` 保留当前会话最近 120 个样本及累计采样数；完整样本写入轮转的 `current-experiment.jsonl`，最多 4 个各约 4 MiB 的文件。状态事件也会轮转。新的守护会话沿用这一日志上限；原有有限时长实验的完整 JSON 不受影响。
 

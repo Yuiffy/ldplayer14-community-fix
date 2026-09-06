@@ -40,6 +40,56 @@ class FakeControl:
 
 
 class GuardTests(unittest.TestCase):
+    def test_stale_heartbeat_is_unknown_even_when_guard_process_exists(self):
+        snapshot = {'state': 'active', 'nvidia_cleanup': True,
+                    'time': '2026-09-06T14:02:42+08:00'}
+        now = guard.datetime.fromisoformat('2026-09-06T18:00:00+08:00')
+        result = guard.status_view(snapshot, True, now)
+        self.assertTrue(result['running'])
+        self.assertEqual(result['state'], 'unresponsive')
+        self.assertIsNone(result['nvidia_cleanup'])
+        self.assertEqual(result['last_recorded'], snapshot)
+
+    def test_fresh_heartbeat_preserves_live_status(self):
+        snapshot = {'state': 'active', 'nvidia_cleanup': True,
+                    'time': '2026-09-06T14:02:42+08:00'}
+        now = guard.datetime.fromisoformat('2026-09-06T14:02:50+08:00')
+        result = guard.status_view(snapshot, True, now)
+        self.assertEqual(result['state'], 'active')
+        self.assertTrue(result['nvidia_cleanup'])
+        self.assertEqual(result['heartbeat_age_seconds'], 8)
+
+    def test_hidden_controller_records_exception_and_nonzero_exit(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'tests') as directory:
+            with mock.patch.object(guard, 'DIRECTORY', Path(directory)), \
+                 mock.patch.object(guard, 'main', side_effect=RuntimeError('fixture controller failure')), \
+                 mock.patch.object(sys, 'argv', ['ld14-guard.py', '--run']), \
+                 mock.patch.object(sys, 'stderr', None):
+                self.assertEqual(guard.run_cli(), 1)
+            log = (Path(directory) / 'controller.log').read_text(encoding='utf-8')
+            self.assertIn('LD14-GUARD-CONTROLLER-2', log)
+            self.assertIn('RuntimeError: fixture controller failure', log)
+            self.assertIn('"exit_code": 1', log)
+
+    def test_status_does_not_report_dead_guard_as_active(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'tests') as directory:
+            status_file = Path(directory) / 'status.json'
+            snapshot = {'state': 'active', 'nvidia_cleanup': True, 'guard_pid': 123,
+                        'time': '2026-09-06T14:02:42+08:00',
+                        'sample': {'private_gib': 4.49}}
+            status_file.write_text(json.dumps(snapshot), encoding='utf-8')
+            with mock.patch.object(guard, 'STATUS', status_file), \
+                 mock.patch.object(guard, 'is_running', return_value=False), \
+                 mock.patch.object(guard, 'load_experiment') as loader, \
+                 mock.patch.object(sys, 'stdout', None):
+                loader.return_value.load_existing_helper.return_value.read_config.return_value = {}
+                result = guard.main(['--status', '--console', 'C:\\test\\ldconsole.exe', '--index', '1'])
+            self.assertFalse(result['running'])
+            self.assertEqual(result['state'], 'not_running')
+            self.assertFalse(result['nvidia_cleanup'])
+            self.assertEqual(result['last_recorded'], snapshot)
+            self.assertNotIn('sample', result)
+
     def run_session_fixture(self, minutes):
         with tempfile.TemporaryDirectory(dir=ROOT / 'tests') as directory:
             directory = Path(directory)

@@ -1,5 +1,7 @@
 # Unreleased
 
+- Correct stale guard status after controller exit and add controller exception diagnostics. A real run lost its controller without an exit record; the cause remains unconfirmed.
+- Launch the guard through a current-user Windows scheduled task with unlimited execution time and recorded exit results. Migrate the old owned Startup shortcut; graceful Stop pauses the task, and Start re-enables it. Automatic failure recovery remains unverified.
 - Add explicit unlimited duration (`--minutes 0`) and a combined semaphore/NVIDIA guard that revalidates new emulator processes, supports graceful stop and optional user-login startup, and bounds diagnostic logs.
 - Add Windows guard lifecycle and session tests; keep the existing native driver cleanup and semaphore patch bytes unchanged.
 - Confirm a NVIDIA 616.64 cleanup-order defect in the tested LD14 workload: driver thread detach creates a new mimalloc heap after TLS cleanup.

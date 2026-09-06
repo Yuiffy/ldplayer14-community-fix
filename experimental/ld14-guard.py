@@ -4,6 +4,7 @@ import argparse
 import ctypes as c
 from ctypes import wintypes as w
 from datetime import datetime
+import faulthandler
 import hashlib
 import importlib.util
 import json
@@ -13,11 +14,13 @@ import os
 from pathlib import Path
 import sys
 import time
+import traceback
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 DIRECTORY = ROOT / 'logs' / 'guard'
 STATUS = DIRECTORY / 'status.json'
+HEARTBEAT_MAX_AGE = 90
 K = c.WinDLL('kernel32', use_last_error=True)
 K.CreateMutexW.argtypes = [c.c_void_p, w.BOOL, w.LPCWSTR]
 K.CreateMutexW.restype = w.HANDLE
@@ -69,6 +72,25 @@ def request_stop(name):
         K.CloseHandle(handle)
 
 
+def status_view(snapshot, running, now=None):
+    now = now or datetime.now().astimezone()
+    try:
+        age = (now - datetime.fromisoformat(snapshot['time'])).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        age = None
+    fresh = age is not None and 0 <= age <= HEARTBEAT_MAX_AGE
+    if not running or not fresh:
+        # Old samples are evidence, not a current measurement or a live hook check.
+        value = {'state': 'not_running' if not running else 'unresponsive',
+                 'nvidia_cleanup': False if not running else None,
+                 'last_recorded': snapshot}
+    else:
+        value = dict(snapshot)
+    value.update(running=running, checked_at=now.isoformat(),
+                 heartbeat_age_seconds=round(age, 3) if age is not None else None)
+    return value
+
+
 class Control:
     def __init__(self, name):
         self.mutex = K.CreateMutexW(None, False, name)
@@ -103,7 +125,8 @@ class StatusLog:
     def __init__(self, experiment, args):
         DIRECTORY.mkdir(parents=True, exist_ok=True)
         self.experiment = experiment
-        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-1', 'guard_pid': os.getpid(),
+        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-2', 'guard_pid': os.getpid(),
+                     'parent_pid': os.getppid(), 'launcher': args.launcher,
                      'console': args.console, 'index': args.index, 'time_limit_minutes': None}
         self.handler = RotatingFileHandler(DIRECTORY / 'events.jsonl', maxBytes=512 * 1024,
                                           backupCount=2, encoding='utf-8')
@@ -187,6 +210,7 @@ def main(argv=None):
     parser.add_argument('--console')
     parser.add_argument('--index', type=int)
     parser.add_argument('--dependency-dir', type=Path, help='Optional local directory containing Frida 17.17.0')
+    parser.add_argument('--launcher', default='direct', choices=('direct', 'task-scheduler'))
     args = parser.parse_args(argv)
     experiment = load_experiment()
     fix = experiment.load_existing_helper()
@@ -201,10 +225,10 @@ def main(argv=None):
     args.console = str(console.resolve())
     name = control_name(args.console, args.index)
     if args.status or args.stop:
-        value = json.loads(STATUS.read_text(encoding='utf-8')) if STATUS.exists() else {}
+        snapshot = json.loads(STATUS.read_text(encoding='utf-8')) if STATUS.exists() else {}
+        value = status_view(snapshot, is_running(name))
         if args.stop:
             value['stop_requested'] = request_stop(name)
-        value['running'] = is_running(name)
         if sys.stdout is not None:
             print(json.dumps(value, indent=2), flush=True)
         return value
@@ -235,10 +259,41 @@ def main(argv=None):
         control.close()
 
 
-if __name__ == '__main__':
+def run_cli():
+    handler = None
+    previous_stderr = sys.stderr
+    exit_code = 0
     try:
+        if '--run' in sys.argv[1:]:
+            DIRECTORY.mkdir(parents=True, exist_ok=True)
+            handler = RotatingFileHandler(DIRECTORY / 'controller.log', maxBytes=512 * 1024,
+                                          backupCount=2, encoding='utf-8')
+            handler.emit(logging.LogRecord('ld14.controller', logging.INFO, '', 0, json.dumps({
+                'marker': 'LD14-GUARD-CONTROLLER-2', 'event': 'start', 'pid': os.getpid(),
+                'parent_pid': os.getppid(), 'time': datetime.now().astimezone().isoformat(),
+            }), (), None))
+            if sys.stderr is None:
+                sys.stderr = handler.stream
+            faulthandler.enable(file=handler.stream)
         main()
-    except Exception as error:
+    except SystemExit as error:
+        exit_code = error.code if isinstance(error.code, int) else 1
+    except BaseException:
+        exit_code = 1
         if sys.stderr is not None:
-            print('ERROR: ' + str(error), file=sys.stderr)
-        sys.exit(1)
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+    finally:
+        if handler is not None:
+            faulthandler.disable()
+            sys.stderr = previous_stderr
+            handler.emit(logging.LogRecord('ld14.controller', logging.INFO, '', 0, json.dumps({
+                'event': 'exit', 'pid': os.getpid(), 'exit_code': exit_code,
+                'time': datetime.now().astimezone().isoformat(),
+            }), (), None))
+            handler.close()
+    return exit_code
+
+
+if __name__ == '__main__':
+    sys.exit(run_cli())

@@ -26,11 +26,13 @@
 
 ## 参与测试
 
-2026-09-06 新增 [NVIDIA 线程退出清理原型](experimental/README.zh-CN.md)，只支持已验证的 NVIDIA 616.64 文件。原型在 `experimental` 目录，需另外安装 Frida 并显式启用；它不在现有信号量 ZIP 中，也不会由原启动器自动应用。
+新增的 [NVIDIA 线程退出清理原型](experimental/README.zh-CN.md) 支持已验证的 NVIDIA **616.64 / 616.92** 文件，按完整 SHA256 选择各自的地址配置。616.92 已通过[新版驱动对照验证](docs/NVIDIA-61692.md)，长期游戏效果仍待观察。原型在 `experimental` 目录，需另外安装 Frida 并显式启用；它不在现有信号量 ZIP 中，也不会由原启动器自动应用。
 
 完整仓库现支持[两个修复的长期后台守护](experimental/README.zh-CN.md#长期运行两个修复)：通过 Windows 计划任务独立运行，无自动到期时间，跟随指定实例重启，可安装当前用户登录启动。用 `Check-LD14-Guard.cmd` 查看状态、`Stop-LD14-Guard.cmd` 停止并暂停任务、`Start-LD14-Guard.cmd` 恢复。此模式仍为版本限定的实验修复。
 
 新版包含 [Frida USB 依赖崩溃保护](docs/FRIDA-USB-CRASH.md)。更新后运行一次 `Start-LD14-Guard.cmd` 即可替换旧守护，更新本身无需重启雷电；状态中应有 `frida_usb_guard.active: true`。
+
+升级至 NVIDIA 616.92 后，先更新完整仓库，再运行 `Start-LD14-Guard.cmd`。新守护标记为 `LD14-DUAL-FIX-GUARD-4`，启用时显示 `driver_version: 616.92`；未知驱动仍会拒绝应用。
 
 按平时方式运行《碧蓝航线》或原来触发问题的负载，预热约 10 分钟后启动 `Record-LD14-Stats.cmd`。每分钟记录一次，默认 4 小时，可按 Ctrl+C 停止。
 

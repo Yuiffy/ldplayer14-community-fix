@@ -91,7 +91,7 @@ The earlier controller disappearance without a dump remains unattributed.
 
 Update the full repository, then run `Start-LD14-Guard.cmd`. It gracefully
 replaces a controller with an older marker and reattaches to the same LD14
-process. `Check-LD14-Guard.cmd` should show `LD14-DUAL-FIX-GUARD-3` and
+process. `Check-LD14-Guard.cmd` should show `LD14-DUAL-FIX-GUARD-4` and
 `frida_usb_guard.active: true`. `skipped_null_paths` starts at zero and counts
 null comparisons handled by that controller.
 

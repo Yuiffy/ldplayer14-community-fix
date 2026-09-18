@@ -1,6 +1,6 @@
 # NVIDIA 线程退出清理实验
 
-此目录是研究原型，不包含在 `v0.1.0-alpha.1` 信号量修补包中。短时对照已经通过，尚未完成《碧蓝航线》长期运行验证，不能称为稳定修复或黑屏修复。
+此目录是研究原型，不包含在 `v0.1.0-alpha.1` 信号量修补包中。616.64 和 616.92 的短时对照已经通过，616.92 尚未完成《碧蓝航线》长期运行验证，不能称为稳定修复或黑屏修复。
 
 ## 已验证的机制
 
@@ -22,10 +22,17 @@
 
 - Windows x64、64 位 Python 3.10 或更新版本。
 - LD14 14.0.26.1，以及主项目校验通过的 renderer / fastpipe2 文件。
-- NVIDIA 616.64，`nvoglv64.dll` SHA256 必须为 `970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9`。
+- NVIDIA 616.64 或 616.92，`nvoglv64.dll` 必须匹配下表的完整 SHA256。
 - Frida `17.17.0` Windows x64，`_frida.pyd` SHA256 必须为 `93638a16bf0a651c6fdc8f41228ce9069e7b79d56834cce7aec9f8b6639c671c`。其他驱动或文件不匹配时，程序会拒绝应用。
 
 不要修改 SHA256 或 RVA 来绕过兼容性检查。其他驱动版本需要重新分析。
+
+| NVIDIA 版本 | `nvoglv64.dll` SHA256 |
+| --- | --- |
+| 616.64 | `970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9` |
+| 616.92 | `693f471a56bb374ff04cefbf4a67a082974a32627d5145f5b1f2d6418736cf6a` |
+
+616.92 需要不同的 DLL 入口、TLS 索引和主堆地址。更新后的启动器按文件哈希自动选择，并核对运行时代码及引用这些数据的指令。[616.92 验证记录](../docs/NVIDIA-61692.md)中的 12 轮 A/B/A 测试分别留下 13、0、13 个线程堆，全部像素检查通过。
 
 ## 安装与测试
 
@@ -63,6 +70,7 @@ powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Install
 - 守护不启动雷电；你按平时方式打开选定实例后，它会自动检查版本、应用信号量修补并保持 NVIDIA 清理有效。
 - 同一实例只能运行一个守护。实例正常退出后守护会等待；再次启动后重新校验并应用两个修复。
 - 双击 `Check-LD14-Guard.cmd` 检查状态。`running: true`、`state: active`、`semaphore_patch: patched` 和 `nvidia_cleanup: true` 表示两项均在运行；新版另有 `frida_usb_guard.active: true`，表示依赖崩溃保护已启用。`waiting_for_ld14` 表示等待雷电启动。
+- 版本适配后的守护标记为 `LD14-DUAL-FIX-GUARD-4`，活跃状态会显示 `driver_version` 和 `driver_sha256`。实验日志标记为 `LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-2`。从旧版更新后执行一次 `Start-LD14-Guard.cmd`，让已运行的控制器加载新代码；无需为这次控制器更新重启模拟器。
 - 双击 `Stop-LD14-Guard.cmd` 正常停止守护并撤掉 NVIDIA 钩子，同时暂停计划任务及登录触发；信号量修补仍保留到雷电退出。`Start-LD14-Guard.cmd` 会重新启用任务及已安装的登录触发。
 - 移除登录启动并停止守护：`powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Uninstall`。再重启雷电可完全回退本次进程内修补。
 
@@ -78,7 +86,7 @@ powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Install
 
 `frida-usb-guard.py` 在设备管理器初始化前，为设备到达和移除循环中的两处比较添加空值检查。空路径按“不匹配”跳过；有效路径继续调用原比较函数。它只在当前 Python 控制器内修改 10 字节调用指令，辅助代码和计数使用 8 KiB 内存，不修改磁盘上的 Frida、雷电或驱动文件。正常 USB 发现仍保留。文件哈希或原始指令不匹配时拒绝启用。
 
-更新完整仓库后，运行一次 `Start-LD14-Guard.cmd`。启动器会正常停止旧版控制器并启动新版，保留正在运行的雷电实例。日志标记为 `LD14-DUAL-FIX-GUARD-3`；`frida_usb_guard.skipped_null_paths` 是本次控制器拦截的空路径比较次数，初始为 0 是正常的。单次实验命令也自动使用该保护。
+更新完整仓库后，运行一次 `Start-LD14-Guard.cmd`。启动器会正常停止旧版控制器并启动新版，保留正在运行的雷电实例。当前日志标记为 `LD14-DUAL-FIX-GUARD-4`；`frida_usb_guard.skipped_null_paths` 是本次控制器拦截的空路径比较次数，初始为 0 是正常的。单次实验命令也自动使用该保护。
 
 此更新本身不要求重启雷电。若之前失去保护后已积累内存，方便时正常重启雷电可以获得干净基线；重新启用守护不会追溯清空历史泄漏。原生隔离测试已验证原版两处比较复现同一崩溃、修正版通过 14 组比较及本地附加测试。长期运行仍需继续观察。详见[依赖崩溃诊断](../docs/FRIDA-USB-CRASH.md)。
 
@@ -92,4 +100,4 @@ powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Install
 
 退出 LD14 会让本次进程内改动全部失效。程序不覆盖磁盘上的厂商 DLL、不安装服务、不修改驱动配置；单次实验下次启动后需要重新启用，后台守护则会自动重新校验和应用。关闭单次实验终端后不要假定补丁仍然有效。
 
-原始转储与完整跟踪只保存在本地；分享日志前检查其中的个人安装路径。当前仅验证单台 RTX 5080 / NVIDIA 616.64，其他环境及长时间运行仍待验证。
+原始转储与完整跟踪只保存在本地；分享日志前检查其中的个人安装路径。当前仅验证单台 RTX 5080 / NVIDIA 616.64、616.92，其他环境及新版驱动长时间运行仍待验证。

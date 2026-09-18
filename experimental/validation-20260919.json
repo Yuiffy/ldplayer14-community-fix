@@ -1,0 +1,114 @@
+{
+  "date": "2026-09-19",
+  "status": "short_reproduction_verified_long_game_test_pending",
+  "ld14_version": "14.0.26.1",
+  "gpu": "RTX 5080",
+  "nvidia_version": "616.92",
+  "driver_sha256": "693f471a56bb374ff04cefbf4a67a082974a32627d5145f5b1f2d6418736cf6a",
+  "frida_version": "17.17.0",
+  "offline_profile_checks": [
+    {
+      "version": "616.64",
+      "sha256": "970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9",
+      "guards_passed": 6,
+      "pe_entry_matches": true,
+      "tls_index_matches": true,
+      "rvas": {
+        "entry": "0x107d678",
+        "tls_index": "0x2d424e8",
+        "current_teb": "0xa7f440",
+        "thread_done": "0xa7f2d0",
+        "empty_heap": "0x1af4a00",
+        "main_heap": "0x2c3af00"
+      }
+    },
+    {
+      "version": "616.92",
+      "sha256": "693f471a56bb374ff04cefbf4a67a082974a32627d5145f5b1f2d6418736cf6a",
+      "guards_passed": 6,
+      "pe_entry_matches": true,
+      "tls_index_matches": true,
+      "rvas": {
+        "entry": "0x107d828",
+        "tls_index": "0x2d554e8",
+        "current_teb": "0xa7f440",
+        "thread_done": "0xa7f2d0",
+        "empty_heap": "0x1af4a00",
+        "main_heap": "0x2c4df00"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "case": "baseline",
+      "cycles": 12,
+      "pixel_checks_passed": 12,
+      "tlds_created_inside_driver_thread_detach": 13,
+      "new_heaps_still_present_after_test": 13,
+      "pages_in_those_heaps": 270,
+      "registered_page_bytes_in_those_heaps": 17694720,
+      "fully_empty_registered_page_bytes": 16646144,
+      "remaining_blocks_after_deferred_frees": 58,
+      "metadata_read_failures": 0,
+      "validation_errors": [],
+      "trace_events": 718,
+      "dropped_events": 0,
+      "cleanup_counters": null,
+      "code_check_after_detach": null,
+      "local_evidence_sha256": "58f0be270604ab64d03da0a89a2588f58710cb4bc84209720c92e8cfb1c8abcb"
+    },
+    {
+      "case": "packaged_cleanup",
+      "cycles": 12,
+      "pixel_checks_passed": 12,
+      "tlds_created_inside_driver_thread_detach": 13,
+      "new_heaps_still_present_after_test": 0,
+      "pages_in_those_heaps": 0,
+      "registered_page_bytes_in_those_heaps": 0,
+      "fully_empty_registered_page_bytes": 0,
+      "remaining_blocks_after_deferred_frees": 0,
+      "metadata_read_failures": 0,
+      "validation_errors": [],
+      "trace_events": 702,
+      "dropped_events": 0,
+      "cleanup_counters": {
+        "thread_detaches": 27,
+        "cleaned_heaps": 13,
+        "cleanup_still_owned": 0,
+        "owner_mismatch": 0
+      },
+      "code_check_after_detach": true,
+      "local_evidence_sha256": "33efc76e13a678e462818faf4a17b8ae1723af85309c0e0973723929fa2805e3"
+    },
+    {
+      "case": "reverted",
+      "cycles": 12,
+      "pixel_checks_passed": 12,
+      "tlds_created_inside_driver_thread_detach": 13,
+      "new_heaps_still_present_after_test": 13,
+      "pages_in_those_heaps": 272,
+      "registered_page_bytes_in_those_heaps": 17825792,
+      "fully_empty_registered_page_bytes": 16449536,
+      "remaining_blocks_after_deferred_frees": 147,
+      "metadata_read_failures": 0,
+      "validation_errors": [],
+      "trace_events": 702,
+      "dropped_events": 0,
+      "cleanup_counters": null,
+      "code_check_after_detach": true,
+      "local_evidence_sha256": "5d17a5fcfa49954ba0d7c0af6bb310d0aee29744be31eaff294a43e85e989405"
+    }
+  ],
+  "regression_tests": {
+    "command": "python -m unittest discover -s tests -v",
+    "passed": 27
+  },
+  "notes": [
+    "All three comparison runs used the same LD14 process with the existing semaphore fix.",
+    "B used the shipped JavaScript callback generated from the selected exact-hash profile.",
+    "Page totals describe newly created heaps, not process-wide memory or all possible leaks.",
+    "A separate disposable WGL process exercised the new driver for 12 cycles: 480 trace events, none dropped.",
+    "Both supported profiles passed GPU-free native ownership, return-value and hook-removal tests.",
+    "No long-running game or black-screen-fix claim is made for 616.92. Raw evidence remains local."
+  ]
+}

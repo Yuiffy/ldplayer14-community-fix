@@ -1,6 +1,7 @@
 'use strict';
 
 const driver = Process.getModuleByName('nvoglv64.dll');
+const rvas = DRIVER_PROFILE.rvas;
 const counts = Memory.alloc(16);
 counts.writeByteArray(new Uint8Array(16));
 const native = new CModule(`
@@ -44,11 +45,11 @@ void on_leave(GumInvocationContext *ctx) {
     tld = heap ? *(guint8 **) heap : NULL;
     if (tld && *(guint8 **) tld == teb) g_atomic_int_add(&counts[2], 1);
 }
-`, {counts, tls_index: driver.base.add(0x2d424e8), current_teb: driver.base.add(0xa7f440),
-    thread_done: driver.base.add(0xa7f2d0), empty_heap: driver.base.add(0x1af4a00),
-    main_heap: driver.base.add(0x2c3af00)});
+`, {counts, tls_index: driver.base.add(rvas.tls_index), current_teb: driver.base.add(rvas.current_teb),
+    thread_done: driver.base.add(rvas.thread_done), empty_heap: driver.base.add(rvas.empty_heap),
+    main_heap: driver.base.add(rvas.main_heap)});
 
-const hook = Interceptor.attach(driver.base.add(0x107d678), {
+const hook = Interceptor.attach(driver.base.add(rvas.entry), {
     onEnter: native.on_enter, onLeave: native.on_leave
 });
 
@@ -61,4 +62,5 @@ rpc.exports = {
     status,
     stop() { hook.detach(); Interceptor.flush(); return status(); }
 };
-send({ready: true, marker: 'LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-1', pid: Process.id});
+send({ready: true, marker: 'LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-2', pid: Process.id,
+    driver_version: DRIVER_PROFILE.version, driver_sha256: DRIVER_PROFILE.sha256});

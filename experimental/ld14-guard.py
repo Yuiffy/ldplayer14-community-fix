@@ -125,7 +125,7 @@ class StatusLog:
     def __init__(self, experiment, args):
         DIRECTORY.mkdir(parents=True, exist_ok=True)
         self.experiment = experiment
-        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-3', 'guard_pid': os.getpid(),
+        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-4', 'guard_pid': os.getpid(),
                      'parent_pid': os.getppid(), 'launcher': args.launcher,
                      'console': args.console, 'index': args.index, 'time_limit_minutes': None}
         self.handler = RotatingFileHandler(DIRECTORY / 'events.jsonl', maxBytes=512 * 1024,
@@ -181,6 +181,7 @@ def watch(fix, experiment, args, control, status):
             def sample(report, row):
                 status.update('active', target_pid=pid, experiment_start=report['start'],
                               semaphore_patch=row['semaphore_patch'], nvidia_cleanup=True,
+                              driver_version=report['driver_version'], driver_sha256=report['driver_sha256'],
                               frida_usb_guard=row['frida_usb_guard'],
                               sample_count=report['sample_count'], sample=row)
 

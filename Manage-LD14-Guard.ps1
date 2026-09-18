@@ -144,7 +144,7 @@ $configuration = @{ python = $Python; dependency_dir = $DependencyDir } | Conver
 [IO.File]::WriteAllText($localConfig, $configuration, [Text.UTF8Encoding]::new($false))
 
 $result = Invoke-Guard @('--status')
-if ($result.running -and ($result.launcher -ne 'task-scheduler' -or $result.marker -ne 'LD14-DUAL-FIX-GUARD-3')) {
+if ($result.running -and ($result.launcher -ne 'task-scheduler' -or $result.marker -ne 'LD14-DUAL-FIX-GUARD-4')) {
     # Upgrade an older controller through its normal hook cleanup path.
     $result = Stop-Guard
 }

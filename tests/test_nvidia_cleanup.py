@@ -1,5 +1,6 @@
 """Exercise the shipped native callback in a disposable child, without a GPU."""
 
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -13,6 +14,9 @@ except ImportError:
     frida = None
 
 ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('cleanup_native_tests', ROOT / 'experimental' / 'nvidia-thread-cleanup.py')
+cleanup = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cleanup)
 
 FIXTURE = r'''
 const fixtureData = Memory.alloc(4096);
@@ -44,8 +48,9 @@ void configure(int mode) {
 }
 `, {data: fixtureData});
 const offsets = new Map([
-    [0x2d424e8, tlsIndex], [0xa7f440, fixture.current_teb], [0xa7f2d0, fixture.thread_done],
-    [0x107d678, fixture.target], [0x1af4a00, fixtureData.add(0x300)], [0x2c3af00, fixtureData.add(0x500)]
+    [PROFILE_RVAS.tls_index, tlsIndex], [PROFILE_RVAS.current_teb, fixture.current_teb],
+    [PROFILE_RVAS.thread_done, fixture.thread_done], [PROFILE_RVAS.entry, fixture.target],
+    [PROFILE_RVAS.empty_heap, fixtureData.add(0x300)], [PROFILE_RVAS.main_heap, fixtureData.add(0x500)]
 ]);
 const testDriver = {base: {add(rva) {
     if (!offsets.has(rva)) throw new Error('Unexpected driver offset');
@@ -79,6 +84,11 @@ rpc.exports.restored = function() {
 @unittest.skipUnless(sys.platform == 'win32' and frida is not None, 'Windows and optional Frida dependency required')
 class NvidiaCleanupTests(unittest.TestCase):
     def test_native_ownership_and_detach_contract(self):
+        for digest, profile in cleanup.DRIVERS.items():
+            with self.subTest(driver=profile['version']):
+                self.run_profile(digest, profile)
+
+    def run_profile(self, digest, profile):
         child = subprocess.Popen([sys.executable, '-u', '-c', 'import sys; print("ready"); sys.stdin.readline()'],
                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  creationflags=subprocess.CREATE_NO_WINDOW)
@@ -88,12 +98,16 @@ class NvidiaCleanupTests(unittest.TestCase):
         try:
             self.assertEqual(child.stdout.readline().strip(), b'ready')
             session = frida.attach(child.pid)
-            source = (ROOT / 'experimental' / 'nvidia-thread-cleanup.js').read_text(encoding='utf-8')
-            script = session.create_script('const SHIPPED_SOURCE = ' + json.dumps(source) + ';\n' + FIXTURE)
+            source = cleanup.build_script(digest, profile)
+            script = session.create_script('const PROFILE_RVAS = ' + json.dumps(profile['rvas']) + ';\n' +
+                                           'const SHIPPED_SOURCE = ' + json.dumps(source) + ';\n' + FIXTURE)
             messages = []
             script.on('message', lambda message, data: messages.append(message))
             script.load()
             self.assertFalse([m for m in messages if m.get('type') == 'error'], messages)
+            ready = next(m['payload'] for m in messages if m.get('payload', {}).get('ready'))
+            self.assertEqual(ready['driver_version'], profile['version'])
+            self.assertEqual(ready['driver_sha256'], digest)
             cases = [
                 ('process-detach', 4, 0, 0, 0), ('process-attach', 4, 1, 0, 0),
                 ('thread-attach', 4, 2, 0, 0), ('empty-heap', 0, 3, 0, 0),

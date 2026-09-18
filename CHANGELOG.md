@@ -1,5 +1,8 @@
 # Unreleased
 
+- Support the exact validated NVIDIA 616.92 OpenGL DLL while preserving 616.64 support. Select separate entry/TLS/main-heap addresses by full DLL SHA256 and also verify the live instructions that reference the allocator globals.
+- Reproduce the cleanup-order defect on 616.92 and verify the shipped callback with a 12-cycle A/B/A comparison: 13, 0, and 13 newly retained heaps, with all pixel checks passing. Publish aggregate evidence; long-running 616.92 gameplay remains pending.
+- Upgrade the guard marker to `LD14-DUAL-FIX-GUARD-4` so Start replaces older controllers, and report the selected driver version/hash. Both supported profiles pass native ownership/detach tests; unknown hashes and altered live TLS references are rejected before applying either patch.
 - Guard null device paths in two bundled libusb comparisons inside the hash-locked Frida 17.17.0 controller. Original native fragments reproduce the captured `0xC0000409 / FAST_FAIL_INVALID_ARG`; guarded fragments preserve valid comparisons and local attachment.
 - Apply this process-local dependency fix before device discovery in both cleanup modes, expose its status and skip count, and gracefully upgrade older running controllers on Start. No emulator restart is required for the controller update.
 - Correct stale guard status after controller exit and add controller exception diagnostics. A real run lost its controller without an exit record; the cause remains unconfirmed.

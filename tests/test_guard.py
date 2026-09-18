@@ -90,7 +90,9 @@ class GuardTests(unittest.TestCase):
             self.assertEqual(result['last_recorded'], snapshot)
             self.assertNotIn('sample', result)
 
-    def run_session_fixture(self, minutes):
+    def run_session_fixture(self, minutes, version='616.64'):
+        driver_sha256, profile = next((digest, item) for digest, item in experiment.DRIVERS.items()
+                                      if item['version'] == version)
         with tempfile.TemporaryDirectory(dir=ROOT / 'tests') as directory:
             directory = Path(directory)
             driver = directory / 'driver.fixture'
@@ -104,7 +106,7 @@ class GuardTests(unittest.TestCase):
             fix.save_report.return_value = 'fixture-report.json'
 
             def read(handle, address, buffer, length, used):
-                expected = dict(experiment.GUARDS)[address]
+                expected = dict(profile['guards'])[address]
                 c.memmove(buffer, expected, len(expected))
                 c.cast(used, c.POINTER(c.c_size_t)).contents.value = len(expected)
                 return True
@@ -113,7 +115,9 @@ class GuardTests(unittest.TestCase):
             callbacks = {}
             script = mock.Mock()
             script.on.side_effect = lambda name, callback: callbacks.update({name: callback})
-            script.load.side_effect = lambda: callbacks['message']({'payload': {'ready': True}}, None)
+            script.load.side_effect = lambda: callbacks['message']({'payload': {
+                'ready': True, 'marker': experiment.MARKER, 'driver_sha256': driver_sha256,
+                'driver_version': version}}, None)
             counters = {'thread_detaches': 1, 'cleaned_heaps': 1, 'owner_mismatch': 0, 'cleanup_still_owned': 0}
             script.exports_sync.status.return_value = counters
             script.exports_sync.stop.return_value = counters
@@ -135,7 +139,7 @@ class GuardTests(unittest.TestCase):
                  mock.patch.dict(sys.modules, {'frida': frida}), \
                  mock.patch.object(experiment.time, 'monotonic', side_effect=lambda: next(clock)), \
                  mock.patch.object(experiment, 'wait_for_end', side_effect=lambda *unused: stop.is_set()):
-                digest.return_value.hexdigest.return_value = experiment.DRIVER_SHA256
+                digest.return_value.hexdigest.return_value = driver_sha256
                 prepare.return_value.snapshot.return_value = {'active': True, 'skipped_null_paths': 0}
                 frida.attach.side_effect = lambda pid: session if prepare.called else self.fail('Dependency guard must precede attach')
                 result = experiment.main(['--apply', '--with-semaphore', '--minutes', str(minutes), '--quiet'],
@@ -143,14 +147,18 @@ class GuardTests(unittest.TestCase):
             session.detach.assert_called_once()
             script.unload.assert_called_once()
             self.assertTrue(result['driver_code_restored'])
+            self.assertEqual(result['driver_version'], version)
+            self.assertEqual(result['driver_sha256'], driver_sha256)
             self.assertTrue(samples[0]['frida_usb_guard']['active'])
             self.assertTrue(any(call.args[2] is True for call in fix.inspect_or_apply.call_args_list))
             return result
 
     def test_zero_duration_keeps_running_until_explicit_stop_and_restores_hook(self):
-        result = self.run_session_fixture(0)
-        self.assertEqual(result['sample_count'], 2)
-        self.assertEqual(result['stop_reason'], 'guard_stop')
+        for version in ('616.64', '616.92'):
+            with self.subTest(version=version):
+                result = self.run_session_fixture(0, version)
+                self.assertEqual(result['sample_count'], 2)
+                self.assertEqual(result['stop_reason'], 'guard_stop')
 
     def test_finite_duration_still_expires_and_restores_hook(self):
         result = self.run_session_fixture(1)
@@ -184,7 +192,8 @@ class GuardTests(unittest.TestCase):
         args = SimpleNamespace(console='C:\\test\\ldconsole.exe', index=1)
 
         def session(argv, **options):
-            options['on_sample']({'start': 'test', 'sample_count': 1},
+            options['on_sample']({'start': 'test', 'sample_count': 1,
+                                  'driver_version': '616.92', 'driver_sha256': 'fixture'},
                                  {'semaphore_patch': 'patched', 'frida_usb_guard': {'active': True}})
             if options['expected_pid'] == 202:
                 control.stopped = True
@@ -201,6 +210,8 @@ class GuardTests(unittest.TestCase):
             self.assertIn('--with-semaphore', argv)
             self.assertEqual(argv[argv.index('--minutes') + 1], '0')
         self.assertEqual(sum(call.args[0] == 'active' for call in status.update.call_args_list), 2)
+        self.assertTrue(all(call.kwargs['driver_version'] == '616.92'
+                            for call in status.update.call_args_list if call.args[0] == 'active'))
 
     def test_incompatible_process_is_blocked_without_repeated_patch_attempts(self):
         fix = mock.Mock()

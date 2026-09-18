@@ -1,4 +1,4 @@
-"""Opt-in NVIDIA 616.64 thread cleanup experiment; not a stable release."""
+"""Opt-in NVIDIA thread cleanup for two exact validated DLLs; not a stable release."""
 
 import argparse
 import ctypes as c
@@ -14,13 +14,50 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-DRIVER_SHA256 = '970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9'
-GUARDS = (
-    (0x107d678, bytes.fromhex('48895c24084889742410574883ec20')),
-    (0xa7f2d0, bytes.fromhex('40535741564883ec40')),
-    (0xa7f440, bytes.fromhex('65488b042530000000c3')),
-)
+MARKER = 'LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-2'
+# Profiles are selected only by the complete on-disk DLL hash. No pattern scan
+# or command-line offset override is used in a running emulator.
+DRIVERS = {
+    '970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9': {
+        'version': '616.64',
+        'rvas': {'entry': 0x107d678, 'tls_index': 0x2d424e8,
+                 'current_teb': 0xa7f440, 'thread_done': 0xa7f2d0,
+                 'empty_heap': 0x1af4a00, 'main_heap': 0x2c3af00},
+        'guards': ((0x107d678, bytes.fromhex('48895c24084889742410574883ec20')),
+                   (0xa7f2d0, bytes.fromhex('40535741564883ec40')),
+                   (0xa7f440, bytes.fromhex('65488b042530000000c3')),
+                   (0xa7f2d9, bytes.fromhex('8b3d09322c02')),
+                   (0xa7f31b, bytes.fromhex('488d2dde560701')),
+                   (0xa7f37f, bytes.fromhex('4c8d3d7abb1b02'))),
+    },
+    '693f471a56bb374ff04cefbf4a67a082974a32627d5145f5b1f2d6418736cf6a': {
+        'version': '616.92',
+        'rvas': {'entry': 0x107d828, 'tls_index': 0x2d554e8,
+                 'current_teb': 0xa7f440, 'thread_done': 0xa7f2d0,
+                 'empty_heap': 0x1af4a00, 'main_heap': 0x2c4df00},
+        'guards': ((0x107d828, bytes.fromhex('48895c24084889742410574883ec20')),
+                   (0xa7f2d0, bytes.fromhex('40535741564883ec40')),
+                   (0xa7f440, bytes.fromhex('65488b042530000000c3')),
+                   (0xa7f2d9, bytes.fromhex('8b3d09622d02')),
+                   (0xa7f31b, bytes.fromhex('488d2dde560701')),
+                   (0xa7f37f, bytes.fromhex('4c8d3d7aeb1c02'))),
+    },
+}
 RECENT_SAMPLES = 120
+
+
+def select_driver(path):
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    profile = DRIVERS.get(digest)
+    if profile is None:
+        raise RuntimeError('Unsupported NVIDIA driver; exact validated 616.64 or 616.92 DLL required (SHA256 ' + digest + ')')
+    return digest, profile
+
+
+def build_script(digest, profile):
+    configuration = {'sha256': digest, 'version': profile['version'], 'rvas': profile['rvas']}
+    return ("'use strict';\nconst DRIVER_PROFILE = " + json.dumps(configuration) + ';\n' +
+            Path(__file__).with_suffix('.js').read_text(encoding='utf-8'))
 
 
 def write_json(path, value):
@@ -106,14 +143,13 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
     driver = fix.modules(pid).get('nvoglv64.dll')
     if driver is None:
         raise RuntimeError('NVIDIA OpenGL driver is not loaded')
-    if hashlib.sha256(Path(driver['path']).read_bytes()).hexdigest() != DRIVER_SHA256:
-        raise RuntimeError('Unsupported NVIDIA driver; this experiment requires the exact validated 616.64 DLL')
+    driver_sha256, profile = select_driver(driver['path'])
     handle = fix.K.OpenProcess(0x410, False, pid)
     if not handle:
         raise c.WinError(c.get_last_error())
 
     def check_code():
-        for rva, expected in GUARDS:
+        for rva, expected in profile['guards']:
             data = c.create_string_buffer(len(expected))
             used = c.c_size_t()
             if not fix.K.ReadProcessMemory(handle, driver['base'] + rva, data, len(expected), c.byref(used)):
@@ -126,7 +162,8 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
         baseline = fix.inspect_or_apply(pid, renderer, False)
         if not args.apply:
             result = {'validated': True, 'applied': False, 'pid': pid,
-                      'driver_sha256': DRIVER_SHA256, 'metrics': baseline['metrics']}
+                      'driver_sha256': driver_sha256, 'driver_version': profile['version'],
+                      'metrics': baseline['metrics']}
             emit(json.dumps(result, indent=2))
             return result
         try:
@@ -142,9 +179,10 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
         output_dir.mkdir(exist_ok=True)
         if output is None:
             output = output_dir / ('nvidia-cleanup-experiment-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.json')
-        report = {'marker': 'LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-1', 'pid': pid,
+        report = {'marker': MARKER, 'pid': pid,
                   'start': datetime.now().astimezone().isoformat(), 'options': vars(args),
-                  'driver_sha256': DRIVER_SHA256, 'baseline': baseline['metrics'], 'samples': [], 'messages': []}
+                  'driver_sha256': driver_sha256, 'driver_version': profile['version'],
+                  'baseline': baseline['metrics'], 'samples': [], 'messages': []}
         if args.with_semaphore:
             report['semaphore_fix'] = fix.inspect_or_apply(pid, renderer, True)
             report['semaphore_report'] = fix.save_report(report['semaphore_fix'])
@@ -161,11 +199,15 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
         try:
             session = frida.attach(pid)
             session.on('detached', lambda *unused: detached.set())
-            script = session.create_script(Path(__file__).with_suffix('.js').read_text(encoding='utf-8'))
+            script = session.create_script(build_script(driver_sha256, profile))
             script.on('message', lambda message, data: report['messages'].append(message))
             script.load()
             loaded = True
-            if not any(m.get('payload', {}).get('ready') for m in report['messages']):
+            if not any(m.get('payload', {}).get('ready') and
+                       m['payload'].get('marker') == MARKER and
+                       m['payload'].get('driver_sha256') == driver_sha256 and
+                       m['payload'].get('driver_version') == profile['version']
+                       for m in report['messages']):
                 raise RuntimeError('Native callback did not report its startup marker')
             duration = 'no time limit' if args.minutes == 0 else str(args.minutes) + ' minutes'
             emit('EXPERIMENT ACTIVE for PID ' + str(pid) + ' (' + duration + '). Ctrl+C detaches it.')

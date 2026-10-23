@@ -236,6 +236,27 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(result['stop_reason'], 'user_interrupt')
         runner.main.assert_called_once()
 
+    def test_supported_upgrade_after_blocked_process_is_applied_automatically(self):
+        fix = mock.Mock()
+        fix.backend_pid.side_effect = [303, 303, 404]
+        fix.verify_target.side_effect = [RuntimeError('Unsupported renderer version'), {'base': 1}]
+        fix.modules.return_value = {'nvoglv64.dll': {'base': 2}}
+        runner = mock.Mock()
+        control = FakeControl()
+        status = mock.Mock()
+
+        def session(argv, **options):
+            control.stopped = True
+            return {'stop_reason': 'guard_stop', 'driver_code_restored': True}
+
+        runner.main.side_effect = session
+        guard.watch(fix, runner, SimpleNamespace(console='unused', index=1), control, status)
+        self.assertEqual(fix.verify_target.call_args_list, [mock.call(303), mock.call(404)])
+        runner.main.assert_called_once()
+        self.assertEqual(runner.main.call_args.kwargs['expected_pid'], 404)
+        self.assertIn('--with-semaphore', runner.main.call_args.args[0])
+        self.assertTrue(any(call.args[0] == 'blocked' for call in status.update.call_args_list))
+
     def test_unlimited_report_is_bounded_but_history_keeps_all_samples(self):
         with tempfile.TemporaryDirectory(dir=ROOT / 'tests') as directory:
             output = Path(directory) / 'report.json'

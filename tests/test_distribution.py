@@ -72,6 +72,42 @@ class DistributionTests(unittest.TestCase):
                 fix.main(['--start', '--console', str(selected), '--index', '9'])
             console.assert_not_called()
 
+    def test_validated_renderer_selects_its_own_profile(self):
+        selected = self.directory / 'ldconsole.exe'
+        renderer = self.directory / 'libOpenglRender2.dll'
+        pipe = self.directory / 'gpu' / 'fastpipe2.dll'
+        pipe.parent.mkdir()
+        renderer.write_bytes(b'fixture renderer')
+        pipe.write_bytes(b'fixture pipe')
+        loaded = {'libopenglrender2.dll': {'base': 0x180000000, 'path': str(renderer)},
+                  'fastpipe2.dll': {'base': 0, 'path': str(pipe)}}
+        for digest, profile in fix.RENDERER_PROFILES.items():
+            with self.subTest(version=profile['version']), \
+                 mock.patch.object(fix, 'CONSOLE', selected), \
+                 mock.patch.object(fix, 'modules', return_value=loaded), \
+                 mock.patch.object(fix.hashlib, 'sha256', side_effect=[
+                     mock.Mock(hexdigest=lambda: digest),
+                     mock.Mock(hexdigest=lambda: profile['fastpipe_sha256'])]):
+                self.assertEqual(fix.verify_target(123)['sha256'], digest)
+
+    def test_supported_files_from_different_builds_are_rejected(self):
+        selected = self.directory / 'ldconsole.exe'
+        renderer = self.directory / 'libOpenglRender2.dll'
+        pipe = self.directory / 'gpu' / 'fastpipe2.dll'
+        pipe.parent.mkdir()
+        renderer.write_bytes(b'fixture renderer')
+        pipe.write_bytes(b'fixture pipe')
+        loaded = {'libopenglrender2.dll': {'base': 0x180000000, 'path': str(renderer)},
+                  'fastpipe2.dll': {'base': 0, 'path': str(pipe)}}
+        digests = list(fix.RENDERER_PROFILES)
+        with mock.patch.object(fix, 'CONSOLE', selected), \
+             mock.patch.object(fix, 'modules', return_value=loaded), \
+             mock.patch.object(fix.hashlib, 'sha256', side_effect=[
+                 mock.Mock(hexdigest=lambda: digests[0]),
+                 mock.Mock(hexdigest=lambda: fix.RENDERER_PROFILES[digests[1]]['fastpipe_sha256'])]):
+            with self.assertRaisesRegex(RuntimeError, 'not a validated pair'):
+                fix.verify_target(123)
+
     def test_setup_keeps_explicit_zero_index_and_space_path(self):
         selected = self.directory / 'LD Player' / 'ldconsole.exe'
         config = self.directory / 'config.json'

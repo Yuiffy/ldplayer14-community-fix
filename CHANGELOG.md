@@ -1,5 +1,8 @@
 # Unreleased
 
+- Support the independently validated LD14 14.0.31.0 renderer/fastpipe pair with its relocated semaphore patch and live instruction guards; preserve 14.0.26.1 support and reject mixed or unknown binaries.
+- Upgrade the guard marker to `LD14-DUAL-FIX-GUARD-5` so Start gracefully reloads older controllers after updating the repository. Document automatic reapplication to supported emulator processes and the manual adaptation/update required for unknown binaries.
+- Validate both semaphore instruction profiles with native handle tests and the 14.0.31.0 / NVIDIA 616.92 combination in a running emulator. Long-term gameplay and blackout behavior remain unverified.
 - Support the exact validated NVIDIA 616.92 OpenGL DLL while preserving 616.64 support. Select separate entry/TLS/main-heap addresses by full DLL SHA256 and also verify the live instructions that reference the allocator globals.
 - Reproduce the cleanup-order defect on 616.92 and verify the shipped callback with a 12-cycle A/B/A comparison: 13, 0, and 13 newly retained heaps, with all pixel checks passing. Publish aggregate evidence; long-running 616.92 gameplay remains pending.
 - Upgrade the guard marker to `LD14-DUAL-FIX-GUARD-4` so Start replaces older controllers, and report the selected driver version/hash. Both supported profiles pass native ownership/detach tests; unknown hashes and altered live TLS references are rejected before applying either patch.

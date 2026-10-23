@@ -125,7 +125,7 @@ class StatusLog:
     def __init__(self, experiment, args):
         DIRECTORY.mkdir(parents=True, exist_ok=True)
         self.experiment = experiment
-        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-4', 'guard_pid': os.getpid(),
+        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-5', 'guard_pid': os.getpid(),
                      'parent_pid': os.getppid(), 'launcher': args.launcher,
                      'console': args.console, 'index': args.index, 'time_limit_minutes': None}
         self.handler = RotatingFileHandler(DIRECTORY / 'events.jsonl', maxBytes=512 * 1024,

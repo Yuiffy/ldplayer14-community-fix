@@ -31,17 +31,18 @@ k.FlushInstructionCache.argtypes = [w.HANDLE, c.c_void_p, c.c_size_t]
 
 
 class NativePatchTests(unittest.TestCase):
-    def exercise(self, patched):
+    def exercise(self, patched, profile):
+        shift = profile['patches'][-1][0] - 0x60aff
         page_rva = 0x60000
         code = bytearray(b'\xcc' * 0x1000)
         # Preserve RDI/RSI and Windows x64 shadow space before the real fragment.
-        entry = bytes.fromhex('57564883ec284889cf4889d6') + fix.jump(page_rva + 12, 0x60aef)
+        entry = bytes.fromhex('57564883ec284889cf4889d6') + fix.jump(page_rva + 12, 0x60aef + shift)
         code[:len(entry)] = entry
-        code[0xaef:0xaf6] = bytes.fromhex('488b8f60040000')
-        code[0xaf6:0xafb] = fix.jump(0x60af6, 0x60afd)
-        code[0xafd:0xb08] = bytes.fromhex('ffd6488b8fc0040000ffd6')
-        code[0xb08:0xb0f] = bytes.fromhex('4883c4285e5fc3')
-        for rva, original, replacement in fix.PATCHES:
+        code[0xaef + shift:0xaf6 + shift] = bytes.fromhex('488b8f60040000')
+        code[0xaf6 + shift:0xafb + shift] = fix.jump(0x60af6 + shift, 0x60afd + shift)
+        code[0xafd + shift:0xb08 + shift] = bytes.fromhex('ffd6488b8fc0040000ffd6')
+        code[0xb08 + shift:0xb0f + shift] = bytes.fromhex('4883c4285e5fc3')
+        for rva, original, replacement in profile['patches']:
             self.assertEqual(len(original), len(replacement))
             value = replacement if patched else original
             code[rva - page_rva:rva - page_rva + len(value)] = value
@@ -73,10 +74,14 @@ class NativePatchTests(unittest.TestCase):
             self.assertTrue(k.VirtualFree(memory, 0, 0x8000))
 
     def test_original_fragment_leaves_first_semaphore_open(self):
-        self.exercise(False)
+        for profile in fix.RENDERER_PROFILES.values():
+            with self.subTest(version=profile['version']):
+                self.exercise(False, profile)
 
     def test_patched_fragment_closes_all_owned_handles(self):
-        self.exercise(True)
+        for profile in fix.RENDERER_PROFILES.values():
+            with self.subTest(version=profile['version']):
+                self.exercise(True, profile)
 
 
 if __name__ == '__main__':

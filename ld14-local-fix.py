@@ -77,6 +77,32 @@ GUARDS = [
     (0x604e0, bytes.fromhex('55415741565657534883ec68488d6c24')),
 ]
 
+# Each renderer and fastpipe pair was analyzed independently. The 14.0.31.0
+# constructor/destructor retain the original control flow and object layout,
+# but both functions moved by 0x180. Never infer offsets from a version string.
+RENDERER_PROFILES = {
+    RENDERER_SHA256: {
+        'version': '14.0.26.1', 'fastpipe_sha256': FASTPIPE_SHA256,
+        'patches': PATCHES, 'guards': GUARDS,
+    },
+    '02c318f5c07ad8699ccdd72eb3bf9db18b515a23b618bb8d7c1dc6c0d4f7d288': {
+        'version': '14.0.31.0',
+        'fastpipe_sha256': 'fa1421cdac5315bc9b5bba36761545cbc92a9f20b2ee18cd0921f08af320701f',
+        'patches': [
+            (0x60b62, bytes.fromhex('662e0f1f8400000000000f1f4000'),
+             bytes.fromhex('488b8fb8040000ffd6') + jump(0x60b6b, 0x60bf1)),
+            (0x60bf1, bytes.fromhex('662e0f1f8400000000000f1f440000'),
+             bytes.fromhex('488b8fc0040000') + jump(0x60bf8, 0x60c86) + b'\x90' * 3),
+            (0x60c7f, bytes.fromhex('488b8fc0040000'), jump(0x60c7f, 0x60b62) + b'\x90' * 2),
+        ],
+        'guards': [
+            (0x60b10, bytes.fromhex('5541574156415541545657534883ec48')),
+            (0x60660, bytes.fromhex('55415741565657534883ec68488d6c24')),
+            (0x60c6f, bytes.fromhex('488b8f60040000488b35f30c9700ffd6')),
+        ],
+    },
+}
+
 
 def console(*arguments):
     result = subprocess.run([str(CONSOLE), *arguments], capture_output=True, timeout=15,
@@ -109,7 +135,8 @@ def verify_installation(path):
     if candidate.name.lower() != 'ldconsole.exe' or not candidate.is_file():
         raise RuntimeError('Select the LD14 installation folder or its ldconsole.exe')
     pipe = candidate.parent / 'gpu' / 'fastpipe2.dll'
-    if not pipe.is_file() or hashlib.sha256(pipe.read_bytes()).hexdigest() != FASTPIPE_SHA256:
+    supported_pipes = {profile['fastpipe_sha256'] for profile in RENDERER_PROFILES.values()}
+    if not pipe.is_file() or hashlib.sha256(pipe.read_bytes()).hexdigest() not in supported_pipes:
         raise RuntimeError('Unsupported LD14 installation; fastpipe2.dll does not match the validated build')
     return candidate.resolve()
 
@@ -177,12 +204,19 @@ def verify_target(pid):
     if Path(pipe['path']).resolve() != (CONSOLE.parent / 'gpu' / 'fastpipe2.dll').resolve():
         raise RuntimeError('The backend is not using the expected LD14 fastpipe2.dll')
     digest = hashlib.sha256(Path(renderer['path']).read_bytes()).hexdigest()
-    if digest != RENDERER_SHA256:
+    profile = RENDERER_PROFILES.get(digest)
+    if profile is None:
         raise RuntimeError('Unsupported renderer version; no patch was applied. SHA256=' + digest)
-    return renderer
+    if hashlib.sha256(Path(pipe['path']).read_bytes()).hexdigest() != profile['fastpipe_sha256']:
+        raise RuntimeError('Renderer and fastpipe2.dll are not a validated pair; no patch was applied')
+    return {**renderer, 'sha256': digest}
 
 
 def inspect_or_apply(pid, renderer, apply):
+    digest = renderer['sha256']
+    profile = RENDERER_PROFILES[digest]
+    patches = profile['patches']
+    guards = profile['guards']
     access = 0xc38 if apply else 0x410
     handle = K.OpenProcess(access, False, pid)
     if not handle:
@@ -203,13 +237,13 @@ def inspect_or_apply(pid, renderer, apply):
             raise c.WinError(c.get_last_error())
 
     def status():
-        for rva, expected in GUARDS:
+        for rva, expected in guards:
             if read(rva, len(expected)) != expected:
                 raise RuntimeError('Unexpected function entry or active instrumentation at ' + hex(rva))
-        current = [read(rva, len(original)) for rva, original, replacement in PATCHES]
-        if all(value == replacement for value, (_, _, replacement) in zip(current, PATCHES)):
+        current = [read(rva, len(original)) for rva, original, replacement in patches]
+        if all(value == replacement for value, (_, _, replacement) in zip(current, patches)):
             return 'patched'
-        if all(value == original for value, (_, original, _) in zip(current, PATCHES)):
+        if all(value == original for value, (_, original, _) in zip(current, patches)):
             return 'original'
         raise RuntimeError('Unexpected or partially patched code; restart LD14 before proceeding')
 
@@ -228,7 +262,7 @@ def inspect_or_apply(pid, renderer, apply):
     try:
         before = status()
         report = {'version': VERSION, 'time': datetime.now().astimezone().isoformat(), 'pid': pid, 'before': before,
-                  'renderer_sha256': RENDERER_SHA256, 'renderer_path': renderer['path'],
+                  'renderer_sha256': digest, 'renderer_version': profile['version'], 'renderer_path': renderer['path'],
                   'base': hex(base), 'instance': INSTANCE, 'scope': 'Configured LD14 instance, current process only',
                   'metrics': metrics()}
         if not apply or before == 'patched':
@@ -251,7 +285,7 @@ def inspect_or_apply(pid, renderer, apply):
             writable = True
             try:
                 # Publish the entry jump last, after both stubs are ready.
-                for rva, original, replacement in PATCHES:
+                for rva, original, replacement in patches:
                     write(rva, replacement)
                 if not K.FlushInstructionCache(handle, page, 0x1000):
                     raise c.WinError(c.get_last_error())
@@ -259,7 +293,7 @@ def inspect_or_apply(pid, renderer, apply):
                     raise RuntimeError('Patch verification failed')
             except BaseException:
                 # No target thread has executed the stubs while suspended.
-                for rva, original, replacement in reversed(PATCHES):
+                for rva, original, replacement in reversed(patches):
                     write(rva, original)
                 K.FlushInstructionCache(handle, page, 0x1000)
                 raise
@@ -277,7 +311,7 @@ def inspect_or_apply(pid, renderer, apply):
         report['pause_ms'] = round((time.perf_counter() - started) * 1000, 3)
         report['after'] = status()
         report['patches'] = [{'rva': hex(rva), 'original': original.hex(), 'replacement': replacement.hex()}
-                             for rva, original, replacement in PATCHES]
+                             for rva, original, replacement in patches]
         return report
     finally:
         K.CloseHandle(handle)

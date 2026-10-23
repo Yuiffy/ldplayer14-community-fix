@@ -9,7 +9,7 @@
 
 ## 适用范围
 
-- Windows 64 位，雷电 14.0.26.1，已验证共享后端版本 6.1.50.161033。
+- Windows 64 位，雷电 14.0.26.1 或 14.0.31.0 的指定文件配对，已验证共享后端版本 6.1.50.161033。
 - 必须匹配下方列出的渲染器和 LD14 fastpipe 文件 SHA256。版本号相同也不代表文件一定相同。
 - 需要 64 位 Python 3.10 或更新版本，以及 `py.exe` Python Launcher。
 - Python 官方下载：<https://www.python.org/downloads/windows/>。安装时包括 Python Launcher；脚本只用 Python 标准库，无额外依赖。
@@ -93,20 +93,19 @@ py -3 .\ld14-local-fix.py --monitor --minutes 120 --interval 60
 
 构造函数为每个 `MyRenderThread` 创建两个信号量，存放在对象 `+0x4b8`、`+0x4c0`。原析构函数只关闭后一个。修补增加前一个信号量的 `CloseHandle`，保留原有清理顺序。
 
-三个修改位置为渲染器 RVA `0x609e2`、`0x60a71`、`0x60aff`；前两个使用同一析构函数内部不可达的对齐空间。修改时短暂挂起选定进程，写入后核对结果、恢复代码页权限，并恢复进程运行。
+14.0.26.1 的三个修改位置为渲染器 RVA `0x609e2`、`0x60a71`、`0x60aff`，14.0.31.0 为 `0x60b62`、`0x60bf1`、`0x60c7f`；各自前两个位置使用同一析构函数内部不可达的对齐空间。按完整文件哈希选择对应配置，不根据版本号推算偏移。修改时短暂挂起选定进程，写入后核对结果、恢复代码页权限，并恢复进程运行。
 
 验证结果：128 个原始机器码案例复现漏关，128 个修补案例全部关闭预期句柄；实时运行记录到 325 次析构、650 次信号量创建和 650 次关闭；Android 离屏 EGL 30 轮像素及资源生命周期检查通过。
 
 然而，修补后游戏实际运行仍曾在约 70 秒内增加 334.98 MiB 私有提交，所以这不是完整的内存泄漏修复。
 
-已验证文件 SHA256：
+已验证文件 SHA256（必须使用同一行的配对，不能混用）：
 
-```text
-libOpenglRender2.dll
-e6d99bc45ae98baa17b3ad3ed9f17d7c5b576279ad07f16b70ef5fdfd06c660f
+| 雷电版本 | libOpenglRender2.dll | LD14 gpu/fastpipe2.dll |
+|---|---|---|
+| 14.0.26.1 | `e6d99bc45ae98baa17b3ad3ed9f17d7c5b576279ad07f16b70ef5fdfd06c660f` | `dd8eeea7484b5ca49d7bae70622f5c53878a627a4cd31cc97cf3f31dba610125` |
+| 14.0.31.0 | `02c318f5c07ad8699ccdd72eb3bf9db18b515a23b618bb8d7c1dc6c0d4f7d288` | `fa1421cdac5315bc9b5bba36761545cbc92a9f20b2ee18cd0921f08af320701f` |
 
-LD14 gpu/fastpipe2.dll
-dd8eeea7484b5ca49d7bae70622f5c53878a627a4cd31cc97cf3f31dba610125
-```
+完整源码仓库另有需Frida依赖的双补丁后台守护，会自动跟随已支持实例重启。该守护及NVIDIA实验不在本信号量ZIP中，说明见仓库主页。未知雷电／驱动文件需要先适配，不能绕过校验。
 
 包内 `SHA256SUMS.txt` 用于核对分享文件是否完整，不是代码签名。`CHANGELOG.md` 记录本版范围，源码采用 MIT 许可证。

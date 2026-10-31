@@ -21,7 +21,7 @@
 ## 运行条件
 
 - Windows x64、64 位 Python 3.10 或更新版本。
-- LD14 14.0.26.1 或 14.0.31.0，以及主项目校验通过的 renderer / fastpipe2 文件配对；14.0.31.0 的适配与验证见[记录](../docs/LD14-14031.md)。
+- LD14 14.0.26.1、14.0.31.0 或 14.0.32.1，以及主项目校验通过的 renderer / fastpipe2 文件配对；14.0.31.0 和 14.0.32.1 的适配与验证见[记录](../docs/LD14-14031.md)和[记录](../docs/LD14-14032.md)。
 - NVIDIA 616.64 或 616.92，`nvoglv64.dll` 必须匹配下表的完整 SHA256。
 - Frida `17.17.0` Windows x64，`_frida.pyd` SHA256 必须为 `93638a16bf0a651c6fdc8f41228ce9069e7b79d56834cce7aec9f8b6639c671c`。其他驱动或文件不匹配时，程序会拒绝应用。
 
@@ -70,7 +70,7 @@ powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Install
 - 守护不启动雷电；你按平时方式打开选定实例后，它会自动检查版本、应用信号量修补并保持 NVIDIA 清理有效。
 - 同一实例只能运行一个守护。实例正常退出后守护会等待；再次启动后重新校验并应用两个修复。
 - 双击 `Check-LD14-Guard.cmd` 检查状态。`running: true`、`state: active`、`semaphore_patch: patched` 和 `nvidia_cleanup: true` 表示两项均在运行；新版另有 `frida_usb_guard.active: true`，表示依赖崩溃保护已启用。`waiting_for_ld14` 表示等待雷电启动。
-- 当前守护标记为 `LD14-DUAL-FIX-GUARD-5`，活跃状态会显示 `driver_version` 和 `driver_sha256`。实验日志标记为 `LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-2`。从旧版更新后执行一次 `Start-LD14-Guard.cmd`，让已运行的控制器加载包括 LD14 14.0.31.0 适配在内的新代码；无需为这次控制器更新重启模拟器。
+- 当前守护标记为 `LD14-DUAL-FIX-GUARD-5`，活跃状态会显示 `driver_version` 和 `driver_sha256`。实验日志标记为 `LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-2`。从旧版更新后执行一次 `Start-LD14-Guard.cmd`，让已运行的控制器加载包括 LD14 14.0.31.0 / 14.0.32.1 适配在内的新代码；无需为这次控制器更新重启模拟器。
 - 双击 `Stop-LD14-Guard.cmd` 正常停止守护并撤掉 NVIDIA 钩子，同时暂停计划任务及登录触发；信号量修补仍保留到雷电退出。`Start-LD14-Guard.cmd` 会重新启用任务及已安装的登录触发。
 - 移除登录启动并停止守护：`powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Uninstall`。再重启雷电可完全回退本次进程内修补。
 

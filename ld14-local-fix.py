@@ -103,6 +103,16 @@ RENDERER_PROFILES = {
     },
 }
 
+# LD14 14.0.32.1 currently installs the same renderer instruction layout as
+# the validated 14.0.31.0 build, but ships a new exact renderer/fastpipe pair.
+# Keep the code profile shared while retaining an independent hash gate.
+RENDERER_PROFILES['ed56d3dfc77b4c3903abb38eee14f24842dfdfebb7c0a85da5a4f6b64600426d'] = {
+    'version': '14.0.32.1',
+    'fastpipe_sha256': 'ecbb6fab5fcfac9d5467c174b9ffc45bb985e5e520a1e90e1a66d950e540ddd3',
+    'patches': RENDERER_PROFILES['02c318f5c07ad8699ccdd72eb3bf9db18b515a23b618bb8d7c1dc6c0d4f7d288']['patches'],
+    'guards': RENDERER_PROFILES['02c318f5c07ad8699ccdd72eb3bf9db18b515a23b618bb8d7c1dc6c0d4f7d288']['guards'],
+}
+
 
 def console(*arguments):
     result = subprocess.run([str(CONSOLE), *arguments], capture_output=True, timeout=15,

@@ -40,6 +40,25 @@ class FakeControl:
 
 
 class GuardTests(unittest.TestCase):
+    def test_main_preserves_auto_setting_in_waiting_and_stopped_status(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / 'tests') as directory:
+            path = Path(directory) / 'status.json'
+            helper = mock.Mock()
+            helper.read_config.return_value = {'console': 'C:/test/ldconsole.exe', 'index': 1, 'auto_adapt': True}
+            loader = mock.Mock()
+            loader.load_existing_helper.return_value = helper
+            with mock.patch.object(guard, 'DIRECTORY', Path(directory)), \
+                 mock.patch.object(guard, 'STATUS', path), \
+                 mock.patch.object(guard, 'Control'), \
+                 mock.patch.object(guard, 'load_experiment', return_value=loader), \
+                 mock.patch.object(guard, 'watch', return_value={}), \
+                 mock.patch.dict(sys.modules, {'frida': SimpleNamespace(__version__='17.17.0')}):
+                loader.write_json.side_effect = lambda target, row: target.write_text(json.dumps(row))
+                guard.main(['--run'])
+            snapshot = json.loads(path.read_text())
+            self.assertEqual(snapshot['state'], 'stopped')
+            self.assertEqual(snapshot['auto_adaptation'], {'enabled': True})
+
     def test_stale_heartbeat_is_unknown_even_when_guard_process_exists(self):
         snapshot = {'state': 'active', 'nvidia_cleanup': True,
                     'time': '2026-09-06T14:02:42+08:00'}

@@ -108,6 +108,6 @@ py -3 .\ld14-local-fix.py --monitor --minutes 120 --interval 60
 | 14.0.32.1 | `ed56d3dfc77b4c3903abb38eee14f24842dfdfebb7c0a85da5a4f6b64600426d` | `ecbb6fab5fcfac9d5467c174b9ffc45bb985e5e520a1e90e1a66d950e540ddd3` |
 | 14.0.36.0 | `cf97012df87e43398b7946abacce012448dd914e7ee546a7aabec690fd351cf6` | `60dd3b2ab06204de47f5f339a2d35ad4da534a03d5d89d67537bd698cbe37484` |
 
-完整源码仓库另有需Frida依赖的双补丁后台守护，会自动跟随已支持实例重启。该守护及NVIDIA实验不在本信号量ZIP中，说明见仓库主页。未知雷电／驱动文件需要先适配，不能绕过校验。
+完整源码仓库另有需Frida依赖的双补丁后台守护，会自动跟随已支持实例重启，并可启用有严格边界的本地自动适配。该守护、自动适配模块及NVIDIA实验不在本信号量ZIP中，说明见仓库主页。ZIP中的未知文件仍会被拒绝，不能绕过校验。
 
 包内 `SHA256SUMS.txt` 用于核对分享文件是否完整，不是代码签名。`CHANGELOG.md` 记录本版范围，源码采用 MIT 许可证。

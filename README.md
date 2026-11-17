@@ -11,7 +11,7 @@
 | `MyRenderThread` 析构漏关第一个信号量 | 已定位；本地修补通过原生及实时验证 |
 | 长期私有提交增长到几十 GiB | 已定位主要空页保留机制；实验清理短时有效，长期待验证 |
 | 显示器短时黑屏 / 驱动恢复 | 尚不能确认与每次内存增长的因果关系 |
-| 其他 LD14 版本、其他 GPU / 驱动组合 | 未验证；文件校验不匹配时拒绝应用 |
+| 其他 LD14 版本、其他 GPU / 驱动组合 | 可选本地自动适配；超出兼容性边界时拒绝应用，长期效果未验证 |
 
 ## 开始使用
 
@@ -32,13 +32,23 @@
 
 新版包含 [Frida USB 依赖崩溃保护](docs/FRIDA-USB-CRASH.md)。更新后运行一次 `Start-LD14-Guard.cmd` 即可替换旧守护，更新本身无需重启雷电；状态中应有 `frida_usb_guard.active: true`。
 
-升级至 NVIDIA 621.01 后，先更新完整仓库，再运行 `Start-LD14-Guard.cmd`。当前守护标记为 `LD14-DUAL-FIX-GUARD-6`，会替换仍在运行的旧版控制器并加载 LD14 14.0.36.0 / NVIDIA 621.01 适配；启用时显示 `driver_version: 621.01`，未知驱动仍会拒绝应用。
+升级至 NVIDIA 621.01 后，先更新完整仓库，再运行 `Start-LD14-Guard.cmd`。当前守护标记为 `LD14-DUAL-FIX-GUARD-7`，会正常替换旧控制器；启用时显示 `driver_version: 621.01`。此版本另提供下述可选自动适配。
 
 ### 雷电升级后是否自动应用
 
 后台守护会跟随已配置实例的进程退出和再次启动。升级后的 renderer / fastpipe2 文件配对、NVIDIA 驱动及运行时指令均在已验证配置内时，两个补丁会自动重新应用。没有变化的组件可继续使用原配置，不能仅按前端版本号判断兼容。
 
-遇到未知文件或代码时，守护会保留错误并拒绝修改目标进程；它不会自动猜测新地址，也不会自动下载或执行远端代码。增加新版适配后，更新本地仓库并运行一次 `Start-LD14-Guard.cmd`，再用 `Check-LD14-Guard.cmd` 确认 `state: active`、`semaphore_patch: patched` 和 `nvidia_cleanup: true`。更换安装目录或实例编号需要重新配置。
+默认模式遇到未知文件仍拒绝应用。完整源码仓库可启用[本地自动适配](docs/AUTO-ADAPT.zh-CN.md)：
+
+```powershell
+py -3 -m pip install -r compatibility/requirements.txt
+py -3 .\ld14-auto-adapt.py --enable
+powershell.exe -NoProfile -File .\Manage-LD14-Guard.ps1 -Action Start
+```
+
+之后更新时，守护对新进程先运行离线兼容性检查和隔离的原生自测，通过才应用。renderer 支持所检查函数搬地址且依赖、字段和清理逻辑一致的情况；fastpipe 必须保持实现一致。当前 NVIDIA 自动检查仅接受实现相同、元数据或签名变化的文件，驱动内部代码或布局变化仍需人工适配。不能保证每个雷电或驱动新版都能自动通过。
+
+检查超时、歧义、代码变化或缺依赖时停止，原因写入 `logs/auto-adapt` 及守护状态。不会自动下载代码、修改磁盘厂商 DLL 或重启模拟器。用 `Check-LD14-Guard.cmd` 确认 `state: active`、`semaphore_patch: patched`、`nvidia_cleanup: true` 和 `auto_adaptation.enabled: true`。更换安装目录或实例编号需要重新配置。
 
 按平时方式运行《碧蓝航线》或原来触发问题的负载，预热约 10 分钟后启动 `Record-LD14-Stats.cmd`。每分钟记录一次，默认 4 小时，可按 Ctrl+C 停止。
 

@@ -144,22 +144,26 @@ $configuration = @{ python = $Python; dependency_dir = $DependencyDir } | Conver
 [IO.File]::WriteAllText($localConfig, $configuration, [Text.UTF8Encoding]::new($false))
 
 $result = Invoke-Guard @('--status')
-if ($result.running -and ($result.launcher -ne 'task-scheduler' -or $result.marker -ne 'LD14-DUAL-FIX-GUARD-6')) {
+$fixSettings = Get-Content -LiteralPath (Join-Path $root 'ld14-fix.config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$desiredAutoAdapt = ($fixSettings.auto_adapt -is [bool]) -and $fixSettings.auto_adapt
+if ($result.running -and ($result.launcher -ne 'task-scheduler' -or $result.marker -ne 'LD14-DUAL-FIX-GUARD-7' -or
+                         $result.auto_adaptation.enabled -ne $desiredAutoAdapt)) {
     # Upgrade an older controller through its normal hook cleanup path.
     $result = Stop-Guard
 }
 if (-not $result.running) {
     Start-ScheduledTask -InputObject $task
-    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+    for ($attempt = 0; $attempt -lt 300; $attempt++) {
         Start-Sleep -Seconds 1
         $result = Invoke-Guard @('--status')
-        if ($result.running -and $result.state -notin @('starting', 'applying')) { break }
+        if ($result.running -and $result.state -notin @('starting', 'applying', 'checking_compatibility')) { break }
+        if (-not $result.running -and $result.state -eq 'failed') { break }
     }
 }
 if ($result.running -and $result.state -ne 'unresponsive' -and $shortcut) {
     Remove-Item -LiteralPath $startupShortcut -ErrorAction Stop
 }
 Add-ManagementStatus $result (Get-OwnedTask) | ConvertTo-Json -Depth 8
-if (-not $result.running -or $result.state -in @('blocked', 'failed', 'unresponsive', 'starting', 'applying')) {
+if (-not $result.running -or $result.state -in @('blocked', 'failed', 'unresponsive', 'starting', 'applying', 'checking_compatibility')) {
     throw 'Both fixes are not active. Check the guard state, controller.log and scheduled task result.'
 }

@@ -6,6 +6,7 @@ import ctypes as c
 from ctypes import wintypes as w
 from datetime import datetime
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import struct
@@ -19,6 +20,7 @@ VERSION = '0.1.0-alpha.1'
 CONFIG = ROOT / 'ld14-fix.config.json'
 CONSOLE = None
 INSTANCE = None
+AUTO_ADAPT = False
 FASTPIPE_SHA256 = 'dd8eeea7484b5ca49d7bae70622f5c53878a627a4cd31cc97cf3f31dba610125'
 RENDERER_SHA256 = 'e6d99bc45ae98baa17b3ad3ed9f17d7c5b576279ad07f16b70ef5fdfd06c660f'
 K = c.WinDLL('kernel32', use_last_error=True)
@@ -152,6 +154,16 @@ def backend_pid():
     raise RuntimeError('Configured LD14 instance was not found: ' + str(INSTANCE))
 
 
+def load_auto_adapter():
+    name = 'ld14_auto_adapter'
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, ROOT / 'ld14-auto-adapt.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[name] = module
+    return sys.modules[name]
+
+
 def verify_installation(path):
     candidate = Path(path).expanduser()
     if candidate.is_dir():
@@ -160,8 +172,12 @@ def verify_installation(path):
         raise RuntimeError('Select the LD14 installation folder or its ldconsole.exe')
     pipe = candidate.parent / 'gpu' / 'fastpipe2.dll'
     supported_pipes = {profile['fastpipe_sha256'] for profile in RENDERER_PROFILES.values()}
-    if not pipe.is_file() or hashlib.sha256(pipe.read_bytes()).hexdigest() not in supported_pipes:
+    if not pipe.is_file():
         raise RuntimeError('Unsupported LD14 installation; fastpipe2.dll does not match the validated build')
+    if hashlib.sha256(pipe.read_bytes()).hexdigest() not in supported_pipes:
+        if not AUTO_ADAPT:
+            raise RuntimeError('Unsupported LD14 installation; fastpipe2.dll does not match the validated build')
+        load_auto_adapter().analyze('pipe', pipe)
     return candidate.resolve()
 
 
@@ -175,7 +191,8 @@ def read_config():
 
 
 def configure(args, saved):
-    global CONSOLE, INSTANCE
+    global CONSOLE, INSTANCE, AUTO_ADAPT
+    AUTO_ADAPT = saved.get('auto_adapt', False) is True
     selected = args.console or saved.get('console')
     if args.setup and not args.console:
         entered = input('LD14 folder or ldconsole.exe path' +
@@ -195,7 +212,8 @@ def configure(args, saved):
             raise RuntimeError('Select a non-negative instance index from the list')
         if INSTANCE not in {item['index'] for item in available}:
             raise RuntimeError('Instance index is not in this LD14 installation')
-        CONFIG.write_text(json.dumps({'console': str(CONSOLE), 'index': INSTANCE}, indent=2), encoding='utf-8')
+        CONFIG.write_text(json.dumps({'console': str(CONSOLE), 'index': INSTANCE,
+                                      **({'auto_adapt': True} if AUTO_ADAPT else {})}, indent=2), encoding='utf-8')
         print('Saved local configuration: ' + str(CONFIG))
         return
     if not args.list and (not isinstance(INSTANCE, int) or isinstance(INSTANCE, bool) or INSTANCE < 0):
@@ -229,16 +247,22 @@ def verify_target(pid):
         raise RuntimeError('The backend is not using the expected LD14 fastpipe2.dll')
     digest = hashlib.sha256(Path(renderer['path']).read_bytes()).hexdigest()
     profile = RENDERER_PROFILES.get(digest)
+    if profile is None and not AUTO_ADAPT:
+        raise RuntimeError('Unsupported renderer version; no patch was applied. SHA256=' + digest)
+    pipe_digest = hashlib.sha256(Path(pipe['path']).read_bytes()).hexdigest()
+    if AUTO_ADAPT and (profile is None or pipe_digest != profile['fastpipe_sha256']):
+        profile = load_auto_adapter().analyze('renderer', renderer['path'], pipe['path'])
+        return {**renderer, 'sha256': digest, 'profile': profile}
     if profile is None:
         raise RuntimeError('Unsupported renderer version; no patch was applied. SHA256=' + digest)
-    if hashlib.sha256(Path(pipe['path']).read_bytes()).hexdigest() != profile['fastpipe_sha256']:
+    if pipe_digest != profile['fastpipe_sha256']:
         raise RuntimeError('Renderer and fastpipe2.dll are not a validated pair; no patch was applied')
     return {**renderer, 'sha256': digest}
 
 
 def inspect_or_apply(pid, renderer, apply):
     digest = renderer['sha256']
-    profile = RENDERER_PROFILES[digest]
+    profile = renderer.get('profile') or RENDERER_PROFILES[digest]
     patches = profile['patches']
     guards = profile['guards']
     access = 0xc38 if apply else 0x410
@@ -288,14 +312,17 @@ def inspect_or_apply(pid, renderer, apply):
         report = {'version': VERSION, 'time': datetime.now().astimezone().isoformat(), 'pid': pid, 'before': before,
                   'renderer_sha256': digest, 'renderer_version': profile['version'], 'renderer_path': renderer['path'],
                   'base': hex(base), 'instance': INSTANCE, 'scope': 'Configured LD14 instance, current process only',
-                  'metrics': metrics()}
+                  'metrics': metrics(), 'auto_adaptation': profile.get('auto_adaptation')}
         if not apply or before == 'patched':
             report['after'] = before
             return report
         suspended = False
         writable = False
         old_protection = w.DWORD()
-        page = base + 0x60000
+        page_rva = min(rva for rva, original, replacement in patches) & ~0xfff
+        if max(rva + len(original) for rva, original, replacement in patches) > page_rva + 4096:
+            raise RuntimeError('Patch spans multiple pages; refusing to modify code')
+        page = base + page_rva
         started = time.perf_counter()
         try:
             result = N.NtSuspendProcess(handle)

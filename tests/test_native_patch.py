@@ -33,19 +33,24 @@ k.FlushInstructionCache.argtypes = [w.HANDLE, c.c_void_p, c.c_size_t]
 class NativePatchTests(unittest.TestCase):
     def exercise(self, patched, profile):
         shift = profile['patches'][-1][0] - 0x60aff
-        page_rva = 0x60000
+        page_rva = profile.get('page_rva', min(p[0] for p in profile['patches']) & ~0xfff)
         code = bytearray(b'\xcc' * 0x1000)
         # Preserve RDI/RSI and Windows x64 shadow space before the real fragment.
         entry = bytes.fromhex('57564883ec284889cf4889d6') + fix.jump(page_rva + 12, 0x60aef + shift)
         code[:len(entry)] = entry
-        code[0xaef + shift:0xaf6 + shift] = bytes.fromhex('488b8f60040000')
-        code[0xaf6 + shift:0xafb + shift] = fix.jump(0x60af6 + shift, 0x60afd + shift)
-        code[0xafd + shift:0xb08 + shift] = bytes.fromhex('ffd6488b8fc0040000ffd6')
-        code[0xb08 + shift:0xb0f + shift] = bytes.fromhex('4883c4285e5fc3')
+        def put(rva, value):
+            offset = rva - page_rva
+            self.assertGreaterEqual(offset, len(entry))
+            self.assertLessEqual(offset + len(value), len(code))
+            code[offset:offset + len(value)] = value
+        put(0x60aef + shift, bytes.fromhex('488b8f60040000'))
+        put(0x60af6 + shift, fix.jump(0x60af6 + shift, 0x60afd + shift))
+        put(0x60afd + shift, bytes.fromhex('ffd6488b8fc0040000ffd6'))
+        put(0x60b08 + shift, bytes.fromhex('4883c4285e5fc3'))
         for rva, original, replacement in profile['patches']:
             self.assertEqual(len(original), len(replacement))
             value = replacement if patched else original
-            code[rva - page_rva:rva - page_rva + len(value)] = value
+            put(rva, value)
         memory = k.VirtualAlloc(None, len(code), 0x3000, 4)
         self.assertTrue(memory)
         try:
@@ -81,6 +86,15 @@ class NativePatchTests(unittest.TestCase):
     def test_patched_fragment_closes_all_owned_handles(self):
         for profile in fix.RENDERER_PROFILES.values():
             with self.subTest(version=profile['version']):
+                self.exercise(True, profile)
+
+    def test_native_fragment_at_relocated_page_and_offsets(self):
+        baseline = next(p for p in fix.RENDERER_PROFILES.values() if p['version'] == '14.0.36.0')
+        for shift in (0x2180, 0x120000):
+            profile = {**baseline, 'patches': [(rva + shift, old, new)
+                                               for rva, old, new in baseline['patches']]}
+            with self.subTest(shift=hex(shift)):
+                self.exercise(False, profile)
                 self.exercise(True, profile)
 
 

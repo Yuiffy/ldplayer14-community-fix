@@ -15,8 +15,9 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = 'LD14-NVIDIA-TLS-CLEANUP-EXPERIMENT-2'
-# Profiles are selected only by the complete on-disk DLL hash. No pattern scan
-# or command-line offset override is used in a running emulator.
+# Exact reviewed hashes take precedence. Opt-in automatic adaptation runs a
+# separate offline proof worker and native fixtures before accepting a new hash.
+# No pattern scan or address guessing is performed inside a running emulator.
 DRIVERS = {
     '970bb2528b3c12867997ac1b344eb6b9b356e18bc8a1ad768238e3306b58a4c9': {
         'version': '616.64',
@@ -58,9 +59,11 @@ DRIVERS = {
 RECENT_SAMPLES = 120
 
 
-def select_driver(path):
+def select_driver(path, auto_adapt=False):
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     profile = DRIVERS.get(digest)
+    if profile is None and auto_adapt is True:
+        profile = load_existing_helper().load_auto_adapter().analyze('driver', path)
     if profile is None:
         versions = ', '.join(item['version'] for item in DRIVERS.values())
         raise RuntimeError('Unsupported NVIDIA driver; exact validated ' + versions + ' DLL required (SHA256 ' + digest + ')')
@@ -156,7 +159,7 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
     driver = fix.modules(pid).get('nvoglv64.dll')
     if driver is None:
         raise RuntimeError('NVIDIA OpenGL driver is not loaded')
-    driver_sha256, profile = select_driver(driver['path'])
+    driver_sha256, profile = select_driver(driver['path'], getattr(fix, 'AUTO_ADAPT', False) is True)
     handle = fix.K.OpenProcess(0x410, False, pid)
     if not handle:
         raise c.WinError(c.get_last_error())
@@ -195,7 +198,10 @@ def main(argv=None, *, stop_event=None, on_sample=None, output=None, expected_pi
         report = {'marker': MARKER, 'pid': pid,
                   'start': datetime.now().astimezone().isoformat(), 'options': vars(args),
                   'driver_sha256': driver_sha256, 'driver_version': profile['version'],
-                  'baseline': baseline['metrics'], 'samples': [], 'messages': []}
+                  'baseline': baseline['metrics'], 'samples': [], 'messages': [],
+                  'auto_adaptation': {'enabled': getattr(fix, 'AUTO_ADAPT', False) is True,
+                                      'renderer': baseline.get('auto_adaptation'),
+                                      'driver': profile.get('auto_adaptation')}}
         if args.with_semaphore:
             report['semaphore_fix'] = fix.inspect_or_apply(pid, renderer, True)
             report['semaphore_report'] = fix.save_report(report['semaphore_fix'])

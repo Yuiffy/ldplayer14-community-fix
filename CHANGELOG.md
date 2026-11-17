@@ -1,5 +1,7 @@
 # Unreleased
 
+- Add opt-in offline adaptation for unknown renderer/fastpipe/driver hashes with a hash-locked reviewed baseline, bounded subprocess analysis, pair validation, native fixtures and live code guards. Renderer functions may relocate only when the checked dependency graph and data constraints match. Fastpipe and current NVIDIA support require implementation-equivalent images; internal driver changes still require manual review. Reports never grant permission on later runs.
+- Add enable/disable and offline-probe commands, pinned analysis dependencies, acceptance/refusal checks using disposable binary copies, and guard compatibility-analysis status. Upgrade the guard marker to `LD14-DUAL-FIX-GUARD-7`; emulator processes are not restarted.
 - Support the exact LD14 14.0.36.0 renderer/fastpipe pair and NVIDIA 621.01 after binary analysis and a 12-cycle EGL A/B/A reproduction (13, 0, 13 newly retained heaps; all pixel checks pass). Keep the relocated CloseHandle guard separate and unknown binaries rejected. Thirty regression tests pass; long-term memory and blackout behavior remain unverified.
 - Upgrade the guard marker to `LD14-DUAL-FIX-GUARD-6` so Start gracefully reloads older controllers with the new profiles.
 - Support the observed LD14 14.0.32.1 renderer/fastpipe pair after verifying that its MyRenderThread code and live guard bytes are identical to the validated 14.0.31.0 layout; keep exact hash pairing and reject all other binaries.

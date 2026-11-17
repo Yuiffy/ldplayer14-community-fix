@@ -125,7 +125,7 @@ class StatusLog:
     def __init__(self, experiment, args):
         DIRECTORY.mkdir(parents=True, exist_ok=True)
         self.experiment = experiment
-        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-6', 'guard_pid': os.getpid(),
+        self.base = {'marker': 'LD14-DUAL-FIX-GUARD-7', 'guard_pid': os.getpid(),
                      'parent_pid': os.getppid(), 'launcher': args.launcher,
                      'console': args.console, 'index': args.index, 'time_limit_minutes': None}
         self.handler = RotatingFileHandler(DIRECTORY / 'events.jsonl', maxBytes=512 * 1024,
@@ -183,6 +183,7 @@ def watch(fix, experiment, args, control, status):
                               semaphore_patch=row['semaphore_patch'], nvidia_cleanup=True,
                               driver_version=report['driver_version'], driver_sha256=report['driver_sha256'],
                               frida_usb_guard=row['frida_usb_guard'],
+                              auto_adaptation=report.get('auto_adaptation', {'enabled': False}),
                               sample_count=report['sample_count'], sample=row)
 
             result = experiment.main(['--apply', '--with-semaphore', '--minutes', '0', '--quiet',
@@ -238,12 +239,17 @@ def main(argv=None):
     status = None
     try:
         status = StatusLog(experiment, args)
+        status.base['auto_adaptation'] = {'enabled': saved.get('auto_adapt') is True}
         status.update('starting')
         if args.dependency_dir is not None:
             sys.path.insert(0, str(args.dependency_dir.resolve(strict=True)))
         import frida
         if frida.__version__ != '17.17.0':
             raise RuntimeError('The validated Frida version is 17.17.0')
+        if saved.get('auto_adapt') is True:
+            fix.load_auto_adapter().on_progress = lambda kind, path: status.update(
+                'checking_compatibility', analysis_kind=kind, analysis_path=path,
+                auto_adaptation={'enabled': True})
         fix.configure(SimpleNamespace(console=args.console, index=args.index, setup=False, list=False), saved)
         result = watch(fix, experiment, args, control, status)
         status.update('stopped', session_end=result.get('stop_reason'),

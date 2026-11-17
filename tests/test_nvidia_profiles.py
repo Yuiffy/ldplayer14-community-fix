@@ -46,7 +46,7 @@ class ProfileRejectionTests(unittest.TestCase):
 
                     def read(handle, address, buffer, length, used):
                         expected = bytearray(dict(profile['guards'])[address])
-                        if address == 0xa7f2d9:
+                        if address == profile['rvas']['thread_done'] + 9:
                             expected[-1] ^= 1
                         c.memmove(buffer, bytes(expected), len(expected))
                         c.cast(used, c.POINTER(c.c_size_t)).contents.value = len(expected)

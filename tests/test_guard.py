@@ -154,7 +154,7 @@ class GuardTests(unittest.TestCase):
             return result
 
     def test_zero_duration_keeps_running_until_explicit_stop_and_restores_hook(self):
-        for version in ('616.64', '616.92'):
+        for version in (profile['version'] for profile in experiment.DRIVERS.values()):
             with self.subTest(version=version):
                 result = self.run_session_fixture(0, version)
                 self.assertEqual(result['sample_count'], 2)

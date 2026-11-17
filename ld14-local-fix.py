@@ -113,6 +113,20 @@ RENDERER_PROFILES['ed56d3dfc77b4c3903abb38eee14f24842dfdfebb7c0a85da5a4f6b646004
     'guards': RENDERER_PROFILES['02c318f5c07ad8699ccdd72eb3bf9db18b515a23b618bb8d7c1dc6c0d4f7d288']['guards'],
 }
 
+# 14.0.36.0: both full functions were independently compared against the
+# original build with only relocated references masked. CloseHandle's IAT
+# reference moved by 0x100; preserve a separate runtime guard for this build.
+RENDERER_PROFILES['cf97012df87e43398b7946abacce012448dd914e7ee546a7aabec690fd351cf6'] = {
+    'version': '14.0.36.0',
+    'fastpipe_sha256': '60dd3b2ab06204de47f5f339a2d35ad4da534a03d5d89d67537bd698cbe37484',
+    'patches': RENDERER_PROFILES['02c318f5c07ad8699ccdd72eb3bf9db18b515a23b618bb8d7c1dc6c0d4f7d288']['patches'],
+    'guards': [
+        (0x60b10, bytes.fromhex('5541574156415541545657534883ec48')),
+        (0x60660, bytes.fromhex('55415741565657534883ec68488d6c24')),
+        (0x60c6f, bytes.fromhex('488b8f60040000488b35f30d9700ffd6')),
+    ],
+}
+
 
 def console(*arguments):
     result = subprocess.run([str(CONSOLE), *arguments], capture_output=True, timeout=15,

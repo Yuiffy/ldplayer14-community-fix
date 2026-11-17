@@ -1,4 +1,4 @@
-"""Opt-in NVIDIA thread cleanup for two exact validated DLLs; not a stable release."""
+"""Opt-in NVIDIA thread cleanup for exact validated DLLs; not a stable release."""
 
 import argparse
 import ctypes as c
@@ -42,6 +42,18 @@ DRIVERS = {
                    (0xa7f31b, bytes.fromhex('488d2dde560701')),
                    (0xa7f37f, bytes.fromhex('4c8d3d7aeb1c02'))),
     },
+    'b57e4c1e92950fbba9bdfc9267e0951b633a16a9b2f4700a7b1194b2d3365642': {
+        'version': '621.01',
+        'rvas': {'entry': 0x10a5458, 'tls_index': 0x2784df8,
+                 'current_teb': 0xa9c060, 'thread_done': 0xa9bef0,
+                 'empty_heap': 0x1a972c0, 'main_heap': 0x2678280},
+        'guards': ((0x10a5458, bytes.fromhex('48895c24084889742410574883ec20')),
+                   (0xa9bef0, bytes.fromhex('40535741564883ec40')),
+                   (0xa9c060, bytes.fromhex('65488b042530000000c3')),
+                   (0xa9bef9, bytes.fromhex('8b3df98ece01')),
+                   (0xa9bf3b, bytes.fromhex('488d2d7eb3ff00')),
+                   (0xa9bf9f, bytes.fromhex('4c8d3ddac2bd01'))),
+    },
 }
 RECENT_SAMPLES = 120
 
@@ -50,7 +62,8 @@ def select_driver(path):
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     profile = DRIVERS.get(digest)
     if profile is None:
-        raise RuntimeError('Unsupported NVIDIA driver; exact validated 616.64 or 616.92 DLL required (SHA256 ' + digest + ')')
+        versions = ', '.join(item['version'] for item in DRIVERS.values())
+        raise RuntimeError('Unsupported NVIDIA driver; exact validated ' + versions + ' DLL required (SHA256 ' + digest + ')')
     return digest, profile
 
 

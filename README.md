@@ -20,19 +20,19 @@
 3. 双击 `Setup-LD14-Fix.cmd`，选择自己的 LD14 安装目录和实例编号。
 4. 双击 `Start-LD14-Fixed.cmd` 启动并修补。用 `Check-LD14-Fix.cmd` 确认 `after: patched`。
 
-完整操作及回退说明：[安装指南](docs/INSTALL.zh-CN.md)。支持 LD14 14.0.26.1、[14.0.31.0](docs/LD14-14031.md) 和 [14.0.32.1](docs/LD14-14032.md) 的三组指定文件，最终以 renderer / fastpipe2 的完整 SHA256 配对和运行时代码校验为准。14.0.32.1 的补丁位置与 14.0.31.0 完整一致，已通过现场二进制结构检查；长期游戏效果仍需观察。
+完整操作及回退说明：[安装指南](docs/INSTALL.zh-CN.md)。支持 LD14 14.0.26.1、[14.0.31.0](docs/LD14-14031.md)、[14.0.32.1](docs/LD14-14032.md) 和 [14.0.36.0](docs/LD14-14036-NVIDIA-62101.md) 的四组指定文件，最终以 renderer / fastpipe2 的完整 SHA256 配对和运行时代码校验为准。14.0.36.0 的补丁位置不变，导入引用变化已单独核对；长期游戏效果仍需观察。
 
 修补只作用于选定实例的当前进程，不覆盖磁盘 DLL。单次启动器模式下，每次重启需要重新应用。启用下述后台守护后，守护会在所选实例每次启动时重新校验并自动应用；需要回退时先停止守护，再正常退出实例。
 
 ## 参与测试
 
-新增的 [NVIDIA 线程退出清理原型](experimental/README.zh-CN.md) 支持已验证的 NVIDIA **616.64 / 616.92** 文件，按完整 SHA256 选择各自的地址配置。616.92 已通过[新版驱动对照验证](docs/NVIDIA-61692.md)，长期游戏效果仍待观察。原型在 `experimental` 目录，需另外安装 Frida 并显式启用；它不在现有信号量 ZIP 中，也不会由原启动器自动应用。
+新增的 [NVIDIA 线程退出清理原型](experimental/README.zh-CN.md) 支持已验证的 NVIDIA **616.64 / 616.92 / 621.01** 文件，按完整 SHA256 选择各自的地址配置。621.01 已通过[新版驱动对照验证](docs/LD14-14036-NVIDIA-62101.md)，长期游戏效果仍待观察。原型在 `experimental` 目录，需另外安装 Frida 并显式启用；它不在现有信号量 ZIP 中，也不会由原启动器自动应用。
 
 完整仓库现支持[两个修复的长期后台守护](experimental/README.zh-CN.md#长期运行两个修复)：通过 Windows 计划任务独立运行，无自动到期时间，跟随指定实例重启，可安装当前用户登录启动。用 `Check-LD14-Guard.cmd` 查看状态、`Stop-LD14-Guard.cmd` 停止并暂停任务、`Start-LD14-Guard.cmd` 恢复。此模式仍为版本限定的实验修复。
 
 新版包含 [Frida USB 依赖崩溃保护](docs/FRIDA-USB-CRASH.md)。更新后运行一次 `Start-LD14-Guard.cmd` 即可替换旧守护，更新本身无需重启雷电；状态中应有 `frida_usb_guard.active: true`。
 
-升级至 NVIDIA 616.92 后，先更新完整仓库，再运行 `Start-LD14-Guard.cmd`。当前守护标记为 `LD14-DUAL-FIX-GUARD-5`，会替换仍在运行的旧版控制器并加载 LD14 14.0.31.0 / 14.0.32.1 适配；启用时显示 `driver_version: 616.92`，未知驱动仍会拒绝应用。
+升级至 NVIDIA 621.01 后，先更新完整仓库，再运行 `Start-LD14-Guard.cmd`。当前守护标记为 `LD14-DUAL-FIX-GUARD-6`，会替换仍在运行的旧版控制器并加载 LD14 14.0.36.0 / NVIDIA 621.01 适配；启用时显示 `driver_version: 621.01`，未知驱动仍会拒绝应用。
 
 ### 雷电升级后是否自动应用
 

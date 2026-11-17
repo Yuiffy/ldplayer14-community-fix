@@ -1,5 +1,7 @@
 # Unreleased
 
+- Support the exact LD14 14.0.36.0 renderer/fastpipe pair and NVIDIA 621.01 after binary analysis and a 12-cycle EGL A/B/A reproduction (13, 0, 13 newly retained heaps; all pixel checks pass). Keep the relocated CloseHandle guard separate and unknown binaries rejected. Thirty regression tests pass; long-term memory and blackout behavior remain unverified.
+- Upgrade the guard marker to `LD14-DUAL-FIX-GUARD-6` so Start gracefully reloads older controllers with the new profiles.
 - Support the observed LD14 14.0.32.1 renderer/fastpipe pair after verifying that its MyRenderThread code and live guard bytes are identical to the validated 14.0.31.0 layout; keep exact hash pairing and reject all other binaries.
 - Support the independently validated LD14 14.0.31.0 renderer/fastpipe pair with its relocated semaphore patch and live instruction guards; preserve 14.0.26.1 support and reject mixed or unknown binaries.
 - Upgrade the guard marker to `LD14-DUAL-FIX-GUARD-5` so Start gracefully reloads older controllers after updating the repository. Document automatic reapplication to supported emulator processes and the manual adaptation/update required for unknown binaries.
